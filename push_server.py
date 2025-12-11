@@ -32,7 +32,7 @@ import uuid
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Header, Request
+from fastapi import FastAPI, HTTPException, Header, Request, APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -40,6 +40,9 @@ logger = logging.getLogger('push_server')
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
 app = FastAPI(title='Push Server (example)')
+
+# Mount all routes under the /controlid prefix to match device expectations
+router = APIRouter(prefix='/controlid')
 
 # API key for admin endpoints. Default 'change-me' but set env var PUSH_SERVER_API_KEY in production.
 ADMIN_API_KEY = os.getenv('PUSH_SERVER_API_KEY', 'change-me')
@@ -77,7 +80,7 @@ def require_admin(x_api_key: Optional[str]) -> None:
             raise HTTPException(status_code=401, detail='Invalid API key')
 
 
-@app.post('/admin/commands')
+@router.post('/admin/commands')
 async def enqueue_command(cmd: Command, x_api_key: Optional[str] = Header(None)):
     """Encola un comando para un dispositivo (admin).
 
@@ -93,14 +96,14 @@ async def enqueue_command(cmd: Command, x_api_key: Optional[str] = Header(None))
     return JSONResponse({'status': 'queued', 'device_id': cmd.device_id, 'command_id': cmd_id})
 
 
-@app.get('/admin/commands/{device_id}')
+@router.get('/admin/commands/{device_id}')
 async def list_admin_commands(device_id: str, x_api_key: Optional[str] = Header(None)):
     require_admin(x_api_key)
     q = COMMAND_QUEUES.get(device_id, [])
     return {'device_id': device_id, 'queued': q}
 
 
-@app.get('/push')
+@router.get('/push')
 async def device_push(deviceId: int = None, uuid: Optional[str] = None, peek: Optional[bool] = False):
     """Endpoint de Pull/Push según especificación.
 
@@ -148,7 +151,7 @@ async def device_push(deviceId: int = None, uuid: Optional[str] = None, peek: Op
     return {'transactions': commands}
 
 
-@app.post('/result')
+@router.post('/result')
 async def device_result(deviceId: int = None, uuid: Optional[str] = None, request: Request = None):
         """Endpoint para recibir el resultado de la ejecución de un push según la especificación.
 
@@ -173,7 +176,7 @@ async def device_result(deviceId: int = None, uuid: Optional[str] = None, reques
         return JSONResponse(status_code=200, content={})
 
 
-@app.delete('/admin/commands/{device_id}/{command_id}')
+@router.delete('/admin/commands/{device_id}/{command_id}')
 async def delete_command(device_id: str, command_id: str, x_api_key: Optional[str] = Header(None)):
     require_admin(x_api_key)
     q = COMMAND_QUEUES.get(device_id, [])
@@ -183,10 +186,14 @@ async def delete_command(device_id: str, command_id: str, x_api_key: Optional[st
     return {'status': 'deleted', 'command_id': command_id}
 
 
-@app.get('/admin/ack_logs')
+@router.get('/admin/ack_logs')
 async def get_ack_logs(x_api_key: Optional[str] = Header(None)):
     require_admin(x_api_key)
     return {'ack_logs': ACK_LOGS}
+
+
+# Register router on the main app so all endpoints are available under /controlid
+app.include_router(router)
 
 
 if __name__ == '__main__':
