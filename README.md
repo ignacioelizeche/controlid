@@ -2,21 +2,26 @@
 
 `controlid_client.py` — Cliente oficial en Python para la Control iD Access API.
 
+Este repositorio incluye:
+- `controlid_client.py`: cliente REST para la API del dispositivo (sesión, auth, CRUD, helpers).
+- `push_server.py`: servidor de ejemplo (FastAPI) para soportar Push (cola en memoria, endpoints `/push` y `/result`).
+- `smoke_push.py`: simulador de dispositivo que hace polling a `/push` y ejecuta los comandos recibidos contra el dispositivo usando `ControlIDClient`.
+
 Requisitos
 - Python 3.11+
-- Dependencia: `requests`
+- Dependencias: `requests`, `fastapi`, `uvicorn`, `pydantic` (solo para `push_server`)
 
-Instalación
-1. Crear un entorno virtual (opcional):
+Instalación rápida
+1. Crear y activar entorno virtual (Windows PowerShell):
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install --upgrade pip
-pip install requests
+pip install requests fastapi uvicorn pydantic
 ```
 
-Uso rápido
+Uso rápido (cliente)
 ```python
 from controlid_client import ControlIDClient
 
@@ -25,7 +30,7 @@ client = ControlIDClient(
     username='admin',
     password='admin',
     protocol='http',
-    cache_ttl=60,   # cache opcional en segundos
+    cache_ttl=60,
 )
 
 # Autenticarse
@@ -35,48 +40,120 @@ client.login()
 users = client.list_users(page=1, per_page=50)
 print(users)
 
-# Crear usuario
-new = client.create_user({'name': 'Juan Perez', 'card_number': '123456'})
-print(new)
-
 # Abrir puerta
 client.open_door(portal_id=3, duration=5)
-
-# Consultar logs de acceso desde/hasta (según soporte del dispositivo)
-logs = client.get_access_logs(start_time='2025-12-01T00:00:00Z', end_time='2025-12-10T23:59:59Z', per_page=200)
-print(len(logs))
 
 # Cerrar sesión
 client.logout()
 ```
 
-Principales funcionalidades
-- Clase principal: `ControlIDClient` con manejo de sesión (cookies y tokens).
-- Métodos HTTP genéricos: `_get`, `_post`, `_put`, `_delete`.
-- CRUD y wrappers explícitos para recursos comunes: `users`, `cards`, `pins`, `templates`, `qrcodes`, `uhf_tags`, `groups`, `areas`, `portals`, `access_rules`, `time_zones`, `alarm_zones`, `devices`, `sec_boxs`, `contacts`, `network_interlocking_rules`, `custom_thresholds`, etc.
-- Métodos especiales:
-  - Logs: `get_access_logs()`, `get_alarm_logs()`, `get_event_logs()`
-  - Control físico: `open_door()`, `trigger_relay()`
-  - Sincronización de plantillas: `template_sync_init()`, `template_sync_end()`
-  - Programaciones: `list_scheduled_unlocks()`, `create_scheduled_unlock()`
-  - Auditoría: `get_change_logs()`
-- Paginación y filtros en `load_objects()` (parámetros `page`, `per_page`, `filters`).
-- Validaciones mínimas de campos requeridos con `_validate_required()`.
-- Caché local en memoria configurable vía `cache_ttl`.
-- Soporte multi-dispositivo: `switch_device()` y tokens por host.
+Push (protocolo)
+-----------------
+Control iD soporta el modo "Push" donde el dispositivo hace polling periódico a un servidor externo para pedir comandos.
 
-Notas de implementación
-- `endpoint_map` contiene el mapeo lógico→ruta. Si la versión del dispositivo usa rutas distintas (prefijos, versiones), actualice `ControlIDClient.endpoint_map` para que apunte a las rutas reales del API del equipo.
-- El método `login()` busca un `token` en el JSON de respuesta o en el header `Authorization`. Si la API usa cookies o esquema distinto, adapte `login()` y `_request()` para mantener el estado apropiado.
-- Por defecto, `ControlIDClient` lanza excepciones (`APIError`, `AuthenticationError`, `NotFoundError`) si la respuesta HTTP tiene código >= 400. Cambie `raise_on_error=False` si prefiere manejar manualmente los códigos de error.
+Esquema básico:
+- Device: realiza `GET /push?deviceId=<id>&uuid=<uuid>` (query string).
+- Server: responde con:
+  - `{}` ó body vacío -> no hay comandos.
+  - Un objeto comando con campos opcionales: `verb`, `endpoint`, `body`, `contentType`, `queryString`.
+  - O bien `{"transactions": [ ... ]}` para enviar múltiples comandos en batch.
+- Device: ejecuta los comandos y luego POSTea el resultado a `/result?deviceId=<id>&uuid=<uuid>` con el body:
+  - Single: `{ "response": ... }`
+  - Batch: `{ "transactions_results": [ { transactionid, success, response }, ... ] }`
 
-Sugerencias y siguientes pasos
-- Si me proporcionas ejemplos reales de endpoints/respuestas (ej. `POST /login` respuesta JSON, paths exactos), adapto `endpoint_map` y las rutas especiales (`/templates/sync/*`, `/portals/{id}/open`, etc.).
-- Puedo añadir validación avanzada con `pydantic` o pruebas unitarias (`pytest`) y un pequeño script de smoke-test que pruebe login, listado y apertura de puerta.
-- Para caching en producción o entornos distribuidos, integrar Redis o similar.
+Ejemplo de respuesta a GET /push (single):
+```json
+{
+  "verb": "POST",
+  "endpoint": "set_configuration.fcgi",
+  "body": { "general": { "attendance_mode": "1" }, "identifier": { "log_type": "1" } },
+  "contentType": "application/json"
+}
+```
+
+Ejemplo de batch (`transactions`):
+```json
+{ "transactions": [ { "transactionid": "1", "verb": "POST", "endpoint": "set_configuration", "body": { ... } }, { "transactionid":"2", ... } ] }
+```
+
+Archivos de ayuda incluidos
+-------------------------
+- `push_server.py` — servidor de ejemplo (FastAPI) con endpoints:
+  - `GET /push?deviceId=&uuid=` — entrega comandos (según spec).
+  - `POST /result?deviceId=&uuid=` — recibe resultados de ejecución (responde vacío).
+  - `POST /admin/commands` — encola comando(s) para pruebas.
+
+- `smoke_push.py` — simulador del dispositivo (hace polling a `/push`, ejecuta en el dispositivo y POSTea `/result`).
+
+Cómo ejecutar el servidor Push (pruebas locales)
+1. Instalar dependencias (ver arriba).
+2. Iniciar server:
+```powershell
+uvicorn push_server:app --host 0.0.0.0 --port 8000
+```
+
+Encolar comandos (admin)
+------------------------
+Usa `POST /admin/commands` para encolar comandos para un `device_id`. Ejemplo con `curl`:
+
+```powershell
+curl -X POST http://localhost:8000/admin/commands -H "Content-Type: application/json" -d '{"device_id":"1001","verb":"POST","endpoint":"set_configuration.fcgi","body":{"general":{"attendance_mode":"1"},"identifier":{"log_type":"1"}},"contentType":"application/json"}'
+```
+
+Simular el dispositivo (smoke_push)
+---------------------------------
+El script `smoke_push.py` actúa como un dispositivo que hace polling y ejecuta comandos:
+
+```powershell
+python smoke_push.py --backend http://localhost:8000 --device-id 1001 --device-host 192.168.1.100 --username admin --password admin --poll-interval 3
+```
+
+- `--device-host` es la IP del dispositivo Control iD real (el `smoke_push` ejecutará las llamadas a ese equipo usando `ControlIDClient`).
+- `--dry-run` imprime las transacciones sin ejecutar y envía resultados simulados al backend.
+
+Ejecutando un comando de "attendance mode"
+------------------------------------------
+Si quieres activar el modo asistencia, el dispositivo suele aceptar un `POST` a `set_configuration.fcgi` con el payload:
+
+```json
+{
+  "general": { "attendance_mode": "1" },
+  "identifier": { "log_type": "1" }
+}
+```
+
+Con `ControlIDClient` (ejemplo Python):
+
+```python
+payload = {"general": {"attendance_mode": "1"}, "identifier": {"log_type": "1"}}
+res = client._post('/set_configuration.fcgi', json=payload)
+print(res)
+```
+
+Si el firmware requiere `?session=<val>` en la URL, puedes extraer la cookie de la sesión y añadirla:
+
+```python
+session_val = client.session.cookies.get('session')
+res = client._post(f'/set_configuration.fcgi?session={session_val}', json=payload)
+```
+
+Notas de depuración
+-------------------
+- Si el endpoint devuelve `404`, prueba añadir prefijos como `/api/v1/` antes de `endpoint` o revisa `ControlIDClient.endpoint_map`.
+- Si hay `SSL`/cert errors en HTTPS con certificados self-signed, configura `client.session.verify = False` temporalmente.
+- Comprueba la cookie `client.session.cookies` después de `login()` para ver si el dispositivo usa cookie o token.
+
+Siguientes pasos recomendados
+-----------------------------
+- Si quieres, puedo:
+  - añadir un helper `set_attendance_mode()` a `ControlIDClient` para encapsular el payload y la llamada;
+  - adaptar `smoke_push.py` para mapear ciertos `endpoint` a wrappers (por ejemplo `open_door`, `set_configuration.fcgi` con query `session`);
+  - reemplazar la cola en memoria por Redis para persistencia.
 
 Contribuir
-- Abrir issues o pull requests con mejoras, mapping de endpoints reales o tests contra dispositivos.
+----------
+- Abrir issues o pull requests con mejoras, mappings reales de endpoints o tests contra dispositivos.
 
 Licencia
+-------
 - Aquí puedes añadir la licencia que prefieras para tu proyecto.

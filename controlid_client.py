@@ -566,6 +566,38 @@ class ControlIDClient:
         """Finaliza proceso de sincronización de plantillas (end)."""
         return self._post('/templates/sync/end', **kwargs)
 
+    def message_to_screen(self, message: str, timeout: int = 3000, *, use_session_query: bool = False, session_param_name: str = 'session', **kwargs) -> Any:
+        """Muestra un mensaje en la pantalla del equipo.
+
+        Args:
+            message: texto a mostrar en el equipo.
+            timeout: milisegundos que dura el mensaje (ej. 3000).
+            use_session_query: si True añade `?{session_param_name}=...` con el valor
+                de la cookie de sesión (si el firmware requiere session en query).
+            session_param_name: nombre del parámetro de sesión en la query (por defecto 'session').
+            **kwargs: argumentos adicionales pasados a `_post`.
+
+        Returns:
+            Respuesta decodificada del dispositivo (JSON o texto).
+
+        Nota: el endpoint típico usado por algunos firmwares es `/message_to_screen.fcgi`.
+        Si tu dispositivo tiene un path distinto, pásalo directamente a `_post`.
+        """
+        payload = {'message': str(message), 'timeout': int(timeout)}
+        path = '/message_to_screen.fcgi'
+        if use_session_query:
+            # intentar obtener nombre de cookie de sesión común si existe
+            cookie_val = None
+            # comprobar varias claves comunes
+            for key in (session_param_name, 'session', 'PHPSESSID', 'sessionid'):
+                v = self.session.cookies.get(key)
+                if v:
+                    cookie_val = v
+                    break
+            if cookie_val:
+                path = f"{path}?{session_param_name}={cookie_val}"
+        return self._post(path, json=payload, **kwargs)
+
     # ----------------------------- Scheduled unlocks --------------------
     def list_scheduled_unlocks(self, **kwargs):
         return self.load_objects('scheduled_unlocks', **kwargs)

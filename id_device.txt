@@ -1,0 +1,74 @@
+Buena pregunta — hay varias formas prácticas de averiguar el deviceId que usa un equipo Control iD. Te explico las más fiables y te doy comandos listos para copiar (PowerShell/curl/Python). Si me pegas la salida puedo indicarte el id concreto.
+
+Métodos para encontrar el deviceId
+
+Desde la interfaz web del equipo:
+
+Entra al web UI (ej. http://192.168.100.22/) → Ajustes / Device / Main information / Configuration. Muchos firmwares muestran un campo “Device ID” o “ID” en la pantalla de configuración.
+Revisa también páginas como “Main information”, “Device configuration” o “System”.
+A través de la API pública del dispositivo:
+
+Prueba endpoints comunes que listan dispositivos o info: /devices, /api/devices, /info, /system, /getInfo o la raíz /.
+Ejemplo PowerShell:
+
+Invoke-WebRequest -Uri 'http://192.168.100.22/devices' -UseBasicParsing
+Ejemplo curl:
+
+curl -s http://192.168.100.22/devices | jq .
+Si devuelven JSON busca campos como deviceId, id, deviceId, idDevice, serial o name.
+Usando el cliente Python (ControlIDClient):
+
+Si el dispositivo expone listado, puedes usar el helper list_devices() que añadimos. Ejemplo:
+
+from controlid_client import ControlIDClientclient = ControlIDClient(host='192.168.100.22', username='Admin', password='tu_pass')client.login()devices = client.list_devices()print(devices)
+Busca en la salida claves tipo id, deviceId, serial, name.
+Si el dispositivo usa Push (polling):
+
+Cuando el dispositivo hace GET /push?deviceId=...&uuid=... envía su deviceId en la query.
+Si usas push_server.py, revisa la consola/logs de uvicorn o el endpoint admin (/admin/ack_logs o /admin/commands/{device_id}) para ver qué deviceId llega cuando el equipo hace el poll.
+Ejemplo: observa las peticiones en la consola del servidor Push (uvicorn mostrará la ruta y parámetros).
+Etiqueta / documentación del equipo:
+
+A veces el deviceId es un número mostrado en la etiqueta física o en la documentación del firmware. Si tienes acceso al menú físico del equipo (pantalla), busca “Device ID”.
+Probar llamadas exploratorias y buscar identificadores:
+
+Si no sabes el endpoint exacto, haz GET / y busca JSON/XML con ids.
+
+Invoke-WebRequest -Uri 'http://192.168.100.22/' -UseBasicParsing
+O usa curl y mira el contenido:
+
+curl -s http://192.168.100.22/ | head -n 200
+Si usas push_server.py y smoke_push.py
+
+Coloca push_server en ejecución y observa logs: cuando el dispositivo haga la petición GET verás deviceId en la URL.
+Si el dispositivo no puede alcanzar tu PC, ejecuta smoke_push.py como gateway local; en su log verás el deviceId usado para el backend.
+Comandos concretos de ejemplo (copiar/pegar)
+
+PowerShell — obtener info raíz:
+
+Invoke-WebRequest -Uri 'http://192.168.100.22/' -UseBasicParsing | Select-Object -ExpandProperty Content
+curl — intentar /devices:
+
+curl -s 'http://192.168.100.22/devices' | jq .
+Python — listar dispositivos con ControlIDClient:
+
+from controlid_client import ControlIDClientc = ControlIDClient(host='192.168.100.22', username='Admin', password='tu_pass')c.login()print(c.list_devices())
+Qué hago si me das acceso a la salida
+
+Si pegas aquí la salida de cualquiera de los curl/PowerShell o el JSON devuelto por client.list_devices(), yo te indico exactamente cuál es el campo correcto (deviceId) y el valor a usar en Push.
+¿Quieres que:
+
+te genere un pequeño script que pruebe varios endpoints (/, /devices, /info) automáticamente y te muestre candidatos a deviceId, o
+ejecutas cualquiera de los comandos anteriores y pegas la salida aquí para que lo analice y te diga el id exacto?
+Elige y lo preparo/analizo.
+
+
+
+{
+  "device_id": "1001",
+  "action": "message_to_screen",
+  "verb": "POST",
+  "endpoint": "message_to_screen.fcgi",
+  "body": { "message": "hello world!", "timeout": 3000 },
+  "contentType": "application/json"
+}
