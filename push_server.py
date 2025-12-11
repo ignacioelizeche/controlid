@@ -39,7 +39,14 @@ from pydantic import BaseModel
 logger = logging.getLogger('push_server')
 logging.basicConfig(level=logging.INFO, format='[%(asctime)s] %(levelname)s: %(message)s')
 
-app = FastAPI(title='Push Server (example)')
+# Expose the OpenAPI/Swagger UI under the /controlid prefix so
+# the device or external tools can access docs at /controlid/docs
+app = FastAPI(
+    title='Push Server (example)',
+    docs_url='/controlid/docs',
+    redoc_url='/controlid/redoc',
+    openapi_url='/controlid/openapi.json',
+)
 
 # Mount all routes under the /controlid prefix to match device expectations
 router = APIRouter(prefix='/controlid')
