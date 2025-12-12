@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Optional
 import requests
 from devices import Device
 import logging
+import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -86,7 +87,7 @@ OBJECT_CLASSES = {
 def load_objects(device: Device, object_name: str, start_time: Optional[int] = None) -> List[Any]:
     """
     Recupera datos del objeto especificado.
-    start_time: Para access_logs, filtra por time >= start_time (Unix timestamp)
+    start_time: Para access_logs, filtra por time >= start_time (Unix timestamp). Si no se especifica, filtra desde el inicio del día actual.
     """
     if device.session_id is None:
         raise ValueError("No hay sesión activa para este dispositivo.")
@@ -98,7 +99,11 @@ def load_objects(device: Device, object_name: str, start_time: Optional[int] = N
     payload = {
         "object": object_name
     }
-    if object_name == "access_logs" and start_time is not None:
+    if object_name == "access_logs":
+        if start_time is None:
+            # Filtrar desde el inicio del día actual
+            today_start = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
+            start_time = int(today_start.timestamp())
         payload["where"] = {
             "access_logs": {
                 "time": {">=": start_time}

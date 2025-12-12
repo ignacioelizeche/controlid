@@ -43,7 +43,7 @@ device = get_device("192.168.100.22")
 login(device)
 
 # Cargar objetos
-logs = load_objects(device, "access_logs")
+logs = load_objects(device, "access_logs")  # Por defecto, solo logs de hoy
 users = load_objects(device, "users")
 
 # Cargar access_logs desde una hora específica (ejemplo: desde el 1 de enero 2025)
@@ -75,7 +75,7 @@ Accede a la documentación interactiva en http://127.0.0.1:8000/docs
 - `POST /devices/{ip}/login`: Login
 - `POST /devices/{ip}/logout`: Logout
 - `GET /devices/{ip}/session`: Verificar sesión
-- `GET /devices/{ip}/objects/{object_name}`: Cargar objetos (users, access_logs, etc.). Para access_logs, opcional query param `start_time` (Unix timestamp) para filtrar desde esa hora.
+- `GET /devices/{ip}/objects/{object_name}`: Cargar objetos (users, access_logs, etc.). Para access_logs, por defecto filtra desde el inicio del día actual; opcional query param `start_time` (Unix timestamp) para filtrar desde otra hora.
 - `POST /devices/{ip}/control/relay`: Liberar relé
 
 ## Módulos
