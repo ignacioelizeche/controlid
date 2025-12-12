@@ -19,9 +19,19 @@ class User:
 @dataclass
 class AccessLog:
     id: int
-    user_id: int
-    timestamp: str
-    event: str
+    time: int
+    event: int
+    device_id: Optional[int] = None
+    identifier_id: Optional[int] = None
+    user_id: Optional[int] = None
+    portal_id: Optional[int] = None
+    identification_rule_id: Optional[int] = None
+    qrcode_value: Optional[str] = None
+    pin_value: Optional[str] = None
+    card_value: Optional[int] = None
+    confidence: Optional[int] = None
+    mask: Optional[int] = None
+    log_type_id: Optional[int] = None
 
 
 @dataclass
@@ -76,24 +86,30 @@ def load_objects(device: Device, object_name: str) -> List[Any]:
     """
     Recupera datos del objeto especificado.
     """
-    if device.session is None:
+    if device.session_id is None:
         raise ValueError("No hay sesión activa para este dispositivo.")
 
     if object_name not in OBJECT_CLASSES:
         raise ValueError(f"Objeto '{object_name}' no soportado.")
 
-    url = f"http://{device.ip}/objects/{object_name}"
+    url = f"http://{device.ip}/load_objects.fcgi?session={device.session_id}"
+    payload = {
+        "object": object_name
+    }
     headers = {
         "Content-Type": "application/json"
     }
     try:
-        response = device.session.post(url, headers=headers, timeout=30)
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
         response.raise_for_status()
         data = response.json()
-        if not isinstance(data, list):
+        if object_name not in data:
+            raise ValueError("Respuesta no contiene los objetos esperados.")
+        objects_data = data[object_name]
+        if not isinstance(objects_data, list):
             raise ValueError("Respuesta no es una lista.")
         cls = OBJECT_CLASSES[object_name]
-        objects = [cls(**item) for item in data]
+        objects = [cls(**item) for item in objects_data]
         logger.info(f"Cargados {len(objects)} objetos '{object_name}' desde {device.ip}")
         return objects
     except requests.RequestException as e:

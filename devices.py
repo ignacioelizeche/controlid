@@ -10,7 +10,7 @@ class Device:
     ip: str
     login: str
     password: str
-    session: Optional[requests.Session] = None
+    session_id: Optional[str] = None
 
     def to_dict(self) -> Dict[str, str]:
         return {

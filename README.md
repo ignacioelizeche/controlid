@@ -4,10 +4,23 @@ API modular en Python para interactuar con dispositivos de Control ID usando RES
 
 ## Instalación
 
+### Windows
 1. Crea un entorno virtual:
    ```bash
    python -m venv .venv
-   .venv\Scripts\activate  # En Windows
+   .venv\Scripts\activate
+   ```
+
+2. Instala dependencias:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Linux/Mac
+1. Crea un entorno virtual:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
    ```
 
 2. Instala dependencias:

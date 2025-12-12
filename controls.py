@@ -10,10 +10,10 @@ def open_relay(device: Device, relay_id: int) -> None:
     """
     Libera un relé.
     """
-    if device.session is None:
+    if device.session_id is None:
         raise ValueError("No hay sesión activa para este dispositivo.")
 
-    url = f"http://{device.ip}/control/relay"
+    url = f"http://{device.ip}/control/relay.fcgi?session={device.session_id}"
     payload = {
         "action": "open",
         "relay_id": relay_id
@@ -22,7 +22,7 @@ def open_relay(device: Device, relay_id: int) -> None:
         "Content-Type": "application/json"
     }
     try:
-        response = device.session.post(url, json=payload, headers=headers, timeout=10)
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
         logger.info(f"Relé {relay_id} liberado en dispositivo {device.ip}")
     except requests.RequestException as e:
