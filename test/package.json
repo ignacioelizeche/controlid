@@ -9,6 +9,7 @@
     "control-id": "^1.0.2",
     "express": "^4.18.2",
     "body-parser": "^1.20.2",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "sqlite3": "^5.1.6"
   }
 }
