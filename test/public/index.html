@@ -20,6 +20,7 @@
       <div class="controls">
         <div class="label-inline">Sesiones activas:</div>
         <div id="sessionIndicator" class="small muted">cargando...</div>
+        <button id="configMonitor" class="btn-link">Config Monitor</button>
         <button id="manageDevices" class="btn-link">Gestionar dispositivos</button>
       </div>
     </div>
@@ -79,6 +80,34 @@
           <button id="addDevice">Añadir</button>
         </div>
       </div>
+
+        <!-- modal monitor config -->
+        <div id="monitorModal" class="modal" style="display:none">
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <h3>Configurar Monitor</h3>
+              <div><button id="closeMonitor">Cerrar</button></div>
+            </div>
+            <div style="margin-top:8px">
+              <div class="row">
+                <div class="col"><label>Hostname</label><input id="mon_hostname" placeholder="ej: 192.168.0.20 o myserver.com"/></div>
+                <div class="col"><label>Port</label><input id="mon_port" type="number" placeholder="8000"/></div>
+              </div>
+              <div class="row" style="margin-top:8px">
+                <div class="col"><label>Path</label><input id="mon_path" placeholder="api/notifications"/></div>
+                <div class="col"><label>Request timeout (ms)</label><input id="mon_timeout" type="number" placeholder="5000"/></div>
+              </div>
+              <div class="row" style="margin-top:8px">
+                <div class="col"><label>Alive interval (ms)</label><input id="mon_alive" type="number" placeholder="30000"/></div>
+                <div class="col"><label>Enable photo upload</label><select id="mon_photo"><option value="0">No</option><option value="1">Sí</option></select></div>
+              </div>
+              <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+                <button id="saveMonitor">Guardar en el dispositivo</button>
+                <button id="saveMonitorDefaults" class="secondary">Guardar defaults</button>
+              </div>
+            </div>
+          </div>
+        </div>
     </div>
 
     <script src="app.js"></script>

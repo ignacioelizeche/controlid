@@ -190,8 +190,70 @@ async function onDeviceChange(){
 document.getElementById('manageDevices').addEventListener('click', ()=>{
   document.getElementById('deviceManager').style.display = 'block';
 });
+document.getElementById('configMonitor').addEventListener('click', async ()=>{
+  const sel = document.getElementById('device');
+  if(!sel || !sel.value) return alert('Selecciona primero un dispositivo');
+  const id = sel.value;
+  const res = await fetch('/api/devices/' + id);
+  const device = await res.json();
+  // prefill fields with device.defaults.monitor if exists or empty
+  const mon = device.defaults && device.defaults.monitor ? device.defaults.monitor : {};
+  document.getElementById('mon_hostname').value = mon.hostname || '';
+  document.getElementById('mon_port').value = mon.port || '';
+  document.getElementById('mon_path').value = mon.path || 'api/notifications';
+  document.getElementById('mon_timeout').value = mon.request_timeout || '5000';
+  document.getElementById('mon_alive').value = mon.alive_interval || '30000';
+  document.getElementById('mon_photo').value = mon.enable_photo_upload ? '1' : '0';
+  document.getElementById('monitorModal').style.display = 'block';
+});
 document.getElementById('closeManager').addEventListener('click', ()=>{
   document.getElementById('deviceManager').style.display = 'none';
+});
+document.getElementById('closeMonitor').addEventListener('click', ()=>{ document.getElementById('monitorModal').style.display='none'; });
+
+document.getElementById('saveMonitor').addEventListener('click', async ()=>{
+  const sel = document.getElementById('device');
+  if(!sel || !sel.value) return alert('Selecciona un dispositivo');
+  const deviceId = sel.value;
+  const monitor = {
+    request_timeout: String(document.getElementById('mon_timeout').value || '5000'),
+    hostname: document.getElementById('mon_hostname').value,
+    port: String(document.getElementById('mon_port').value || ''),
+    path: document.getElementById('mon_path').value || 'api/notifications',
+    alive_interval: parseInt(document.getElementById('mon_alive').value || '30000'),
+    enable_photo_upload: document.getElementById('mon_photo').value === '1' ? true : false
+  };
+  const body = { command: 'setMonitorConfig', params: { deviceId, monitor } };
+  const respEl = document.getElementById('response'); respEl.textContent = 'Configurando monitor...';
+  try{
+    const r = await fetch('/api/execute', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    const data = await r.json();
+    respEl.textContent = JSON.stringify(data, null, 2);
+    // update session list and history
+    addHistory('setMonitorConfig', { deviceId, monitor }, data);
+    loadSessions();
+  }catch(e){ respEl.textContent = 'Error: '+e.message }
+});
+
+document.getElementById('saveMonitorDefaults').addEventListener('click', async ()=>{
+  const sel = document.getElementById('device');
+  if(!sel || !sel.value) return alert('Selecciona un dispositivo');
+  const deviceId = sel.value;
+  const res = await fetch('/api/devices/' + deviceId);
+  const device = await res.json();
+  const monitor = {
+    request_timeout: String(document.getElementById('mon_timeout').value || '5000'),
+    hostname: document.getElementById('mon_hostname').value,
+    port: String(document.getElementById('mon_port').value || ''),
+    path: document.getElementById('mon_path').value || 'api/notifications',
+    alive_interval: parseInt(document.getElementById('mon_alive').value || '30000'),
+    enable_photo_upload: document.getElementById('mon_photo').value === '1' ? true : false
+  };
+  const defaults = device.defaults || {};
+  defaults.monitor = monitor;
+  const put = await fetch('/api/devices/' + deviceId, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: device.name, ip: device.ip, login: device.login, password: device.password, defaults }) });
+  if(put.ok) { alert('Defaults guardados'); await loadDevices(); document.getElementById('monitorModal').style.display='none'; }
+  else alert('Error guardando defaults');
 });
 
 document.getElementById('addDevice').addEventListener('click', async ()=>{

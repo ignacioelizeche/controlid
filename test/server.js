@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
+const axios = require('axios');
 
 // control-id modules
 const Login = require('control-id/login/Login');
@@ -31,7 +32,8 @@ const commands = {
   getSystemInfo: { desc: 'Get system information', params: ['deviceIp','session'] },
   getAccessLogs: { desc: 'Get access logs', params: ['deviceIp','session','limit'] },
   fr_registerImage: { desc: 'Facial register image (base64)', params: ['deviceIp','session','match','user_id','image_base64'] },
-  fr_getUserImage: { desc: 'Get face image by user id', params: ['deviceIp','session','user_id'] }
+  fr_getUserImage: { desc: 'Get face image by user id', params: ['deviceIp','session','user_id'] },
+  setMonitorConfig: { desc: 'Set monitor configuration on device', params: ['deviceIp','session','monitor'] }
 };
 
 // Ensure data directory exists
@@ -202,6 +204,57 @@ app.post('/api/execute', async (req, res) => {
       const { deviceIp, session } = params || {};
       const sys = new System(deviceIp, session);
       result = await sys.getAccessLogs();
+    } else if (command === 'setMonitorConfig') {
+      // Accept either deviceIp+session or deviceId (will be merged earlier in flow)
+      let { deviceIp, session, monitor } = params || {};
+      // If deviceId was provided but deviceIp not present, try to fetch device
+      if ((!deviceIp || !session) && params && params.deviceId) {
+        const device = await new Promise((resolve, reject) => {
+          db.get('SELECT * FROM devices WHERE id = ?', [params.deviceId], (err, row) => {
+            if (err) return reject(err);
+            resolve(row ? { ...row, defaults: row.defaults ? JSON.parse(row.defaults) : {} } : null);
+          });
+        });
+        if (device) {
+          deviceIp = deviceIp || device.ip;
+          // if session missing, auto-login was attempted earlier; session may now be in params.session
+        }
+      }
+
+      if (!deviceIp) return res.status(400).json({ error: 'deviceIp (or deviceId) is required' });
+      if (!monitor || typeof monitor !== 'object') return res.status(400).json({ error: 'monitor object required' });
+
+      // Normalize monitor object: ensure types and clean path
+      function normalizeMonitor(m){
+        const out = {};
+        if (m.request_timeout !== undefined) out.request_timeout = String(m.request_timeout);
+        if (m.hostname !== undefined) out.hostname = String(m.hostname);
+        if (m.port !== undefined) out.port = String(m.port);
+        if (m.path !== undefined) {
+          // remove leading/trailing slashes
+          out.path = String(m.path).replace(/^\/+|\/+$/g, '');
+        }
+        if (m.alive_interval !== undefined) out.alive_interval = Number(m.alive_interval);
+        if (m.enable_photo_upload !== undefined) out.enable_photo_upload = (m.enable_photo_upload === true || m.enable_photo_upload === '1' || m.enable_photo_upload === 1);
+        if (m.inform_access_event_id !== undefined) out.inform_access_event_id = Number(m.inform_access_event_id);
+        // copy any other keys as-is
+        Object.keys(m).forEach(k => {
+          if (!out.hasOwnProperty(k)) out[k] = m[k];
+        });
+        return out;
+      }
+
+      const monitorPayload = normalizeMonitor(monitor);
+
+      // post to device /set_configuration.fcgi?session=
+      try {
+        const url = `http://${deviceIp}/set_configuration.fcgi?session=${session || ''}`;
+        const response = await axios.post(url, { monitor: monitorPayload }, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
+        result = response.data;
+      } catch (err) {
+        console.error('Error setting monitor config:', err.message || err, 'payload:', monitorPayload);
+        return res.status(500).json({ error: err.message || String(err) });
+      }
     } else {
       return res.status(400).json({ error: 'Not implemented' });
     }
@@ -211,6 +264,45 @@ app.post('/api/execute', async (req, res) => {
     console.error(e);
     res.status(500).json({ error: e.message || String(e) });
   }
+});
+
+// Return the monitor webhook URL and an example monitor config
+app.get('/api/monitor/url/:deviceId?', (req, res) => {
+  const host = req.get('host');
+  const protocol = req.protocol;
+  const base = `${protocol}://${host}`;
+  const deviceId = req.params.deviceId || null;
+
+  // Provide the base notification path and an example monitor configuration
+  const notificationBase = `${base}/api/notifications`;
+  const paths = {
+    dao: `${notificationBase}/dao`,
+    usb_drive: `${notificationBase}/usb_drive`,
+    template: `${notificationBase}/template`,
+    user_image: `${notificationBase}/user_image`,
+    card: `${notificationBase}/card`,
+    pin: `${notificationBase}/pin`,
+    password: `${notificationBase}/password`,
+    catra_event: `${notificationBase}/catra_event`,
+    operation_mode: `${notificationBase}/operation_mode`,
+    device_is_alive: `${notificationBase}/device_is_alive`,
+    door: `${notificationBase}/door`,
+    secbox: `${notificationBase}/secbox`,
+    access_photo: `${notificationBase}/access_photo`
+  };
+
+  const exampleMonitor = {
+    hostname: req.hostname || host,
+    port: (req.socket && req.socket.localPort) || process.env.PORT || 3000,
+    path: '/api/notifications',
+    alive_interval: 60,
+    enable_photo_upload: true,
+    inform_access_event_id: 1,
+    // the device will POST JSON objects to e.g. `${hostname}:${port}${path}/dao`
+    note: 'Use the appropriate path above for each notification type. If using a local dev server, expose the port with a public tunnel (ngrok) for devices on another network.'
+  };
+
+  res.json({ base, paths, exampleMonitor, deviceId });
 });
 
 const port = process.env.PORT || 3000;

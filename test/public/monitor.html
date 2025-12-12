@@ -1,0 +1,68 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Monitor Events</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;margin:16px}
+    .top{display:flex;gap:12px;align-items:center}
+    .btn{padding:8px 12px;background:#1976d2;color:#fff;border-radius:4px;text-decoration:none;cursor:pointer}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:8px;border:1px solid #ddd;text-align:left}
+    pre{white-space:pre-wrap;background:#f6f6f6;padding:8px;border-radius:4px}
+    .small{font-size:0.9em;color:#555}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <h2>Monitor events</h2>
+    <button id="refresh" class="btn">Refresh</button>
+    <button id="copyUrl" class="btn">Copy webhook info</button>
+    <a href="/" class="btn" style="background:#4caf50">Main UI</a>
+  </div>
+  <div id="webhookInfo" class="small" style="margin-top:8px"></div>
+  <table id="eventsTable">
+    <thead><tr><th>id</th><th>path</th><th>device_id</th><th>created_at</th><th>payload</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    async function fetchEvents(){
+      const res = await fetch('/api/monitor/events');
+      const json = await res.json();
+      const tbody = document.querySelector('#eventsTable tbody');
+      tbody.innerHTML = '';
+      json.forEach(r => {
+        const tr = document.createElement('tr');
+        const tdId = document.createElement('td'); tdId.textContent = r.id;
+        const tdPath = document.createElement('td'); tdPath.textContent = r.path;
+        const tdDev = document.createElement('td'); tdDev.textContent = r.device_id || '';
+        const tdCreated = document.createElement('td'); tdCreated.textContent = r.created_at;
+        const tdPayload = document.createElement('td'); tdPayload.innerHTML = '<pre>'+ (r.payload ? JSON.stringify(JSON.parse(r.payload),null,2) : '') +'</pre>';
+        tr.append(tdId, tdPath, tdDev, tdCreated, tdPayload);
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function fetchWebhook(){
+      const res = await fetch('/api/monitor/url');
+      const json = await res.json();
+      const info = `Base: ${json.base}\nPath example: ${json.paths.dao}\nExample monitor config: ${JSON.stringify(json.exampleMonitor,null,2)}`;
+      document.getElementById('webhookInfo').textContent = info;
+      return info;
+    }
+
+    document.getElementById('refresh').addEventListener('click', ()=>fetchEvents());
+    document.getElementById('copyUrl').addEventListener('click', async ()=>{
+      const info = await fetchWebhook();
+      await navigator.clipboard.writeText(info);
+      alert('Webhook info copied to clipboard');
+    });
+
+    // initial load
+    fetchEvents();
+    fetchWebhook();
+  </script>
+</body>
+</html>
