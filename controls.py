@@ -1,0 +1,33 @@
+import requests
+from devices import Device
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def open_relay(device: Device, relay_id: int) -> None:
+    """
+    Libera un relé.
+    """
+    if device.session is None:
+        raise ValueError("No hay sesión activa para este dispositivo.")
+
+    url = f"http://{device.ip}/control/relay"
+    payload = {
+        "action": "open",
+        "relay_id": relay_id
+    }
+    headers = {
+        "Content-Type": "application/json"
+    }
+    try:
+        response = device.session.post(url, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        logger.info(f"Relé {relay_id} liberado en dispositivo {device.ip}")
+    except requests.RequestException as e:
+        logger.error(f"Error al liberar relé {relay_id} en {device.ip}: {e}")
+        raise ValueError(f"Error al liberar relé: {e}")
+
+
+# Agregar más funciones de control aquí, como crear usuario, etc.
