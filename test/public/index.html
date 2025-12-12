@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ControlID - Ejecutar comandos</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; margin: 20px; }
+    label { display:block; margin-top:8px }
+    input, select, textarea { width: 100%; padding:8px; margin-top:4px }
+    #params { margin-top: 12px }
+    #response { margin-top: 12px; white-space: pre-wrap; background:#f6f6f6; padding:10px; border:1px solid #ddd }
+    button { margin-top: 12px; padding:10px 16px }
+  </style>
+</head>
+<body>
+  <h2>ControlID - Ejecutar comandos</h2>
+  <p>Selecciona un comando, completa los parámetros y pulsa <strong>Ejecutar</strong>.</p>
+
+  <label for="command">Comando</label>
+  <select id="command"></select>
+
+  <div id="params"></div>
+
+  <button id="execute">Ejecutar</button>
+
+  <h3>Respuesta</h3>
+  <div id="response">Ninguna ejecución aún.</div>
+
+  <script src="app.js"></script>
+</body>
+</html>
