@@ -243,6 +243,7 @@ app.post('/api/execute', async (req, res) => {
         for (const p of attempts) {
           try {
             const url = `http://${deviceIp}${p}?session=${session || ''}`;
+            console.log('getAccessLogs POST ->', url, 'body=', JSON.stringify(body));
             const r = await axios.post(url, body, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
             result = r.data;
             responded = true;
@@ -250,8 +251,9 @@ app.post('/api/execute', async (req, res) => {
           } catch (err) {
             // try next
             // record last error for fallback
-            console.warn('getAccessLogs attempt failed for', p, err.message || err);
-            result = null;
+            const respData = err.response && err.response.data ? err.response.data : null;
+            console.warn('getAccessLogs attempt failed for', p, 'err=', err.message || err, 'response=', respData);
+            result = respData || null;
           }
         }
 
