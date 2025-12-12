@@ -231,12 +231,13 @@ app.post('/api/execute', async (req, res) => {
         if (m.hostname !== undefined) out.hostname = String(m.hostname);
         if (m.port !== undefined) out.port = String(m.port);
         if (m.path !== undefined) {
-          // remove leading/trailing slashes
-          out.path = String(m.path).replace(/^\/+|\/+$/g, '');
+          // ensure exactly one leading slash, no trailing slash
+          const cleaned = String(m.path).replace(/^\/+|\/+$/g, '');
+          out.path = cleaned ? `/${cleaned}` : '';
         }
-        if (m.alive_interval !== undefined) out.alive_interval = Number(m.alive_interval);
-        if (m.enable_photo_upload !== undefined) out.enable_photo_upload = (m.enable_photo_upload === true || m.enable_photo_upload === '1' || m.enable_photo_upload === 1);
-        if (m.inform_access_event_id !== undefined) out.inform_access_event_id = Number(m.inform_access_event_id);
+        if (m.alive_interval !== undefined) out.alive_interval = String(m.alive_interval);
+        if (m.enable_photo_upload !== undefined) out.enable_photo_upload = (m.enable_photo_upload === true || m.enable_photo_upload === '1' || m.enable_photo_upload === 1) ? '1' : '0';
+        if (m.inform_access_event_id !== undefined) out.inform_access_event_id = String(m.inform_access_event_id);
         // copy any other keys as-is
         Object.keys(m).forEach(k => {
           if (!out.hasOwnProperty(k)) out[k] = m[k];
@@ -252,14 +253,188 @@ app.post('/api/execute', async (req, res) => {
         const response = await axios.post(url, { monitor: monitorPayload }, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
         result = response.data;
       } catch (err) {
-        console.error('Error setting monitor config:', err.message || err, 'payload:', monitorPayload);
-        return res.status(500).json({ error: err.message || String(err) });
+        const detail = err.response && err.response.data ? err.response.data : null;
+        console.error('Error setting monitor config:', err.message || err, 'payload:', monitorPayload, 'response:', detail);
+        return res.status(500).json({ error: err.message || String(err), detail });
       }
     } else {
       return res.status(400).json({ error: 'Not implemented' });
     }
 
     res.json({ success: true, result });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// Fetch full device configuration (get_configuration) and extract monitor module params
+app.get('/api/devices/:id/configuration', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const device = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM devices WHERE id = ?', [id], (err, row) => {
+        if (err) return reject(err);
+        resolve(row ? { ...row, defaults: row.defaults ? JSON.parse(row.defaults) : {} } : null);
+      });
+    });
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    if (!device.ip) return res.status(400).json({ error: 'Device has no IP configured' });
+
+    // try cached session
+    let session;
+    const cached = sessionCache.get(String(id));
+    if (cached && cached.expiresAt > Date.now()) session = cached.session;
+
+    // if no session, try login using saved credentials
+    if (!session) {
+      if (!device.login || !device.password) return res.status(400).json({ error: 'No cached session and device has no credentials stored' });
+      try {
+        const lg = new Login(device.ip, device.login, device.password);
+        session = await lg.login();
+        sessionCache.set(String(id), { session, expiresAt: Date.now() + SESSION_TTL_MS });
+      } catch (e) {
+        return res.status(500).json({ error: 'Auto-login failed', detail: e.message || String(e) });
+      }
+    }
+
+    // request configuration from device
+    try {
+      const url = `http://${device.ip}/get_configuration.fcgi?session=${session || ''}`;
+      // force text response so we get raw XML even if Content-Type confuses axios
+      const response = await axios.get(url, { timeout: 15000, responseType: 'text' });
+      // response should now be raw text (XML)
+      const text = String(response.data || '');
+      const status = response.status;
+      const contentType = response.headers && response.headers['content-type'];
+
+      // try to extract <module name="monitor"> ... </module>
+      const moduleMatch = text.match(/<module[^>]*name=["']monitor["'][^>]*>([\s\S]*?)<\/module>/i);
+      const monitorModule = moduleMatch ? moduleMatch[1] : null;
+      const params = [];
+      if (monitorModule) {
+        const re = /<param[^>]*name=["']([^"']+)["'][^>]*>/g;
+        let m;
+        while ((m = re.exec(monitorModule)) !== null) {
+          params.push(m[1]);
+        }
+      }
+
+      return res.json({ monitorModuleExists: !!monitorModule, params, raw: text.substring(0, 200000), status, contentType });
+    } catch (err) {
+      const detail = err.response && err.response.data ? err.response.data : err.message || String(err);
+      return res.status(500).json({ error: 'Failed to fetch configuration', detail });
+    }
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// Fetch many endpoints from device to show full available configuration and responses
+app.get('/api/devices/:id/fullconfig', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const device = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM devices WHERE id = ?', [id], (err, row) => {
+        if (err) return reject(err);
+        resolve(row ? { ...row, defaults: row.defaults ? JSON.parse(row.defaults) : {} } : null);
+      });
+    });
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    if (!device.ip) return res.status(400).json({ error: 'Device has no IP configured' });
+
+    // ensure session (reuse code from configuration endpoint)
+    let session;
+    const cached = sessionCache.get(String(id));
+    if (cached && cached.expiresAt > Date.now()) session = cached.session;
+    if (!session) {
+      if (!device.login || !device.password) return res.status(400).json({ error: 'No cached session and device has no credentials stored' });
+      try {
+        const lg = new Login(device.ip, device.login, device.password);
+        session = await lg.login();
+        sessionCache.set(String(id), { session, expiresAt: Date.now() + SESSION_TTL_MS });
+      } catch (e) {
+        return res.status(500).json({ error: 'Auto-login failed', detail: e.message || String(e) });
+      }
+    }
+
+    const candidatePaths = [
+      '/get_configuration.fcgi',
+      '/get_modules.fcgi',
+      '/get_system_info.fcgi',
+      '/get_configuration.cgi',
+      '/get_monitor.fcgi',
+      '/get_all_config.fcgi',
+      '/get_configuration_xml.fcgi'
+    ];
+
+    const results = {};
+    for (const p of candidatePaths) {
+      const url = `http://${device.ip}${p}?session=${session || ''}`;
+      try {
+        const r = await axios.get(url, { timeout: 15000, responseType: 'text' });
+        results[p] = { status: r.status, contentType: r.headers && r.headers['content-type'], body: String(r.data).substring(0, 200000) };
+      } catch (err) {
+        const detail = err.response && err.response.data ? String(err.response.data).substring(0,200000) : (err.message || String(err));
+        results[p] = { error: true, detail };
+      }
+    }
+
+    // Also include system info using wrapper (if available)
+    let systemInfo = null;
+    try {
+      const sys = new System(device.ip, session);
+      systemInfo = await sys.getSystemInfo();
+    } catch (e) {
+      systemInfo = { error: e.message || String(e) };
+    }
+
+    return res.json({ deviceId: id, ip: device.ip, session: !!session, systemInfo, endpoints: results });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// Proxy to POST /get_configuration.fcgi on the device. Accepts optional JSON body to request specific sections.
+app.post('/api/devices/:id/getconfig', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const body = req.body && Object.keys(req.body).length ? req.body : {};
+    const device = await new Promise((resolve, reject) => {
+      db.get('SELECT * FROM devices WHERE id = ?', [id], (err, row) => {
+        if (err) return reject(err);
+        resolve(row ? { ...row, defaults: row.defaults ? JSON.parse(row.defaults) : {} } : null);
+      });
+    });
+    if (!device) return res.status(404).json({ error: 'Device not found' });
+    if (!device.ip) return res.status(400).json({ error: 'Device has no IP configured' });
+
+    // ensure session
+    let session;
+    const cached = sessionCache.get(String(id));
+    if (cached && cached.expiresAt > Date.now()) session = cached.session;
+    if (!session) {
+      if (!device.login || !device.password) return res.status(400).json({ error: 'No cached session and device has no credentials stored' });
+      try {
+        const lg = new Login(device.ip, device.login, device.password);
+        session = await lg.login();
+        sessionCache.set(String(id), { session, expiresAt: Date.now() + SESSION_TTL_MS });
+      } catch (e) {
+        return res.status(500).json({ error: 'Auto-login failed', detail: e.message || String(e) });
+      }
+    }
+
+    const url = `http://${device.ip}/get_configuration.fcgi?session=${session || ''}`;
+    try {
+      const r = await axios.post(url, body, { headers: { 'Content-Type': 'application/json' }, timeout: 20000 });
+      // return whatever the device returned
+      return res.status(200).json({ status: r.status, contentType: r.headers && r.headers['content-type'], body: r.data });
+    } catch (err) {
+      const detail = err.response && err.response.data ? err.response.data : err.message || String(err);
+      return res.status(500).json({ error: 'Failed to POST get_configuration', detail });
+    }
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: e.message || String(e) });
