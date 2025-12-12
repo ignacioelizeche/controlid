@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Any
+from typing import List, Any, Optional
 from api import add_device, get_device, remove_device, list_devices, login, logout, is_session_valid, load_objects, open_relay
 from devices import Device
 from objects import OBJECT_CLASSES
@@ -68,12 +68,12 @@ async def check_session(ip: str):
         raise HTTPException(status_code=404, detail=str(e))
 
 @app.get("/devices/{ip}/objects/{object_name}")
-async def get_objects(ip: str, object_name: str):
+async def get_objects(ip: str, object_name: str, start_time: Optional[int] = None):
     if object_name not in OBJECT_CLASSES:
         raise HTTPException(status_code=400, detail=f"Objeto '{object_name}' no soportado")
     try:
         device = get_device(ip)
-        objects = load_objects(device, object_name)
+        objects = load_objects(device, object_name, start_time)
         return {"objects": [obj.__dict__ for obj in objects]}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

@@ -32,6 +32,7 @@ class AccessLog:
     confidence: Optional[int] = None
     mask: Optional[int] = None
     log_type_id: Optional[int] = None
+    component_id: Optional[int] = None
 
 
 @dataclass
@@ -82,9 +83,10 @@ OBJECT_CLASSES = {
 }
 
 
-def load_objects(device: Device, object_name: str) -> List[Any]:
+def load_objects(device: Device, object_name: str, start_time: Optional[int] = None) -> List[Any]:
     """
     Recupera datos del objeto especificado.
+    start_time: Para access_logs, filtra por time >= start_time (Unix timestamp)
     """
     if device.session_id is None:
         raise ValueError("No hay sesión activa para este dispositivo.")
@@ -96,6 +98,12 @@ def load_objects(device: Device, object_name: str) -> List[Any]:
     payload = {
         "object": object_name
     }
+    if object_name == "access_logs" and start_time is not None:
+        payload["where"] = {
+            "access_logs": {
+                "time": {">=": start_time}
+            }
+        }
     headers = {
         "Content-Type": "application/json"
     }

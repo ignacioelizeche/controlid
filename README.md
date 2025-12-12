@@ -46,6 +46,11 @@ login(device)
 logs = load_objects(device, "access_logs")
 users = load_objects(device, "users")
 
+# Cargar access_logs desde una hora específica (ejemplo: desde el 1 de enero 2025)
+import time
+start_timestamp = int(time.mktime(time.strptime("2025-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")))
+logs_filtrados = load_objects(device, "access_logs", start_time=start_timestamp)
+
 # Liberar relé
 open_relay(device, 1)
 
@@ -70,7 +75,7 @@ Accede a la documentación interactiva en http://127.0.0.1:8000/docs
 - `POST /devices/{ip}/login`: Login
 - `POST /devices/{ip}/logout`: Logout
 - `GET /devices/{ip}/session`: Verificar sesión
-- `GET /devices/{ip}/objects/{object_name}`: Cargar objetos
+- `GET /devices/{ip}/objects/{object_name}`: Cargar objetos (users, access_logs, etc.). Para access_logs, opcional query param `start_time` (Unix timestamp) para filtrar desde esa hora.
 - `POST /devices/{ip}/control/relay`: Liberar relé
 
 ## Módulos
