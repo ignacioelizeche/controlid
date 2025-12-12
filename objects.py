@@ -13,6 +13,13 @@ logger = logging.getLogger(__name__)
 class User:
     id: int
     name: str
+    registration: Optional[str] = None
+    password: Optional[str] = None
+    salt: Optional[str] = None
+    expires: Optional[int] = None
+    user_type_id: Optional[int] = None
+    begin_time: Optional[int] = None
+    end_time: Optional[int] = None
     card: Optional[str] = None
     pin: Optional[str] = None
 
