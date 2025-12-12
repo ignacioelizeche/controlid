@@ -201,9 +201,66 @@ app.post('/api/execute', async (req, res) => {
       const sys = new System(deviceIp, session);
       result = await sys.getSystemInfo();
     } else if (command === 'getAccessLogs') {
-      const { deviceIp, session } = params || {};
-      const sys = new System(deviceIp, session);
-      result = await sys.getAccessLogs();
+      // Build and POST a request that uses `fields` as an array (device expects array, not object).
+      // If deviceIp/session aren't present, try to resolve from deviceId (merged earlier if provided).
+      let { deviceIp, session, limit } = params || {};
+
+      // if deviceId provided but deviceIp missing, fetch device record
+      if ((!deviceIp || !session) && params && params.deviceId) {
+        const device = await new Promise((resolve, reject) => {
+          db.get('SELECT * FROM devices WHERE id = ?', [params.deviceId], (err, row) => {
+            if (err) return reject(err);
+            resolve(row ? { ...row, defaults: row.defaults ? JSON.parse(row.defaults) : {} } : null);
+          });
+        });
+        if (device) {
+          deviceIp = deviceIp || device.ip;
+          // session may already be in params due to auto-login earlier
+        }
+      }
+
+      if (!deviceIp) {
+        // fallback to using wrapper which will give a clearer error
+        const sys = new System(deviceIp, session);
+        result = await sys.getAccessLogs();
+      } else {
+        // common fields to request from access_logs; device expects an array here
+        const fieldsArray = ['id','user_id','registration','time','event','device_id','door_id','access_event_id'];
+        const body = { object: 'access_logs', fields: fieldsArray };
+        if (limit) {
+          const n = parseInt(limit, 10);
+          if (!Number.isNaN(n) && n > 0) body.limit = n;
+        }
+
+        // try the common endpoints used by devices; prefer get_access_logs.fcgi, then load_objects
+        const attempts = [
+          `/get_access_logs.fcgi`,
+          `/get_access_logs`,
+          `/load_objects`,
+        ];
+
+        let responded = false;
+        for (const p of attempts) {
+          try {
+            const url = `http://${deviceIp}${p}?session=${session || ''}`;
+            const r = await axios.post(url, body, { headers: { 'Content-Type': 'application/json' }, timeout: 15000 });
+            result = r.data;
+            responded = true;
+            break;
+          } catch (err) {
+            // try next
+            // record last error for fallback
+            console.warn('getAccessLogs attempt failed for', p, err.message || err);
+            result = null;
+          }
+        }
+
+        if (!responded) {
+          // final fallback: try the System wrapper which may build a different request
+          const sys = new System(deviceIp, session);
+          result = await sys.getAccessLogs();
+        }
+      }
     } else if (command === 'setMonitorConfig') {
       // Accept either deviceIp+session or deviceId (will be merged earlier in flow)
       let { deviceIp, session, monitor } = params || {};
