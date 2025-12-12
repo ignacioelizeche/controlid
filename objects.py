@@ -20,6 +20,8 @@ class User:
     user_type_id: Optional[int] = None
     begin_time: Optional[int] = None
     end_time: Optional[int] = None
+    image_timestamp: Optional[int] = None
+    last_access: Optional[int] = None
     card: Optional[str] = None
     pin: Optional[str] = None
 
