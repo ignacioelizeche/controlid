@@ -480,5 +480,53 @@ app.get('/api/monitor/url/:deviceId?', (req, res) => {
   res.json({ base, paths, exampleMonitor, deviceId });
 });
 
+// Self-test endpoint: post sample monitor events to local endpoints and return DB-stored events
+app.get('/api/monitor/selftest', async (req, res) => {
+  try {
+    const serverPort = process.env.PORT || 3000;
+    const base = `http://localhost:${serverPort}`;
+    const samples = [
+      { path: 'dao', body: { object_changes: [{ object: 'access_logs', type: 'inserted', values: { id: '999', time: Math.floor(Date.now()/1000).toString(), event: '12', device_id: '123', user_id: '0' } }], device_id: 123 } },
+      { path: 'usb_drive', body: { usb_drive: { event: 'Export formatted access logs routine succeeded' }, device_id: 123, time: Math.floor(Date.now()/1000) } },
+      { path: 'template', body: { template: { id: 't1' }, device_id: 123 } },
+      { path: 'user_image', body: { user_image: { id: 'u1' }, device_id: 123 } },
+      { path: 'card', body: { card: { id: 'c1' }, device_id: 123 } },
+      { path: 'pin', body: { pin: { id: 'p1' }, device_id: 123 } },
+      { path: 'password', body: { password: { id: 'pw1' }, device_id: 123 } },
+      { path: 'catra_event', body: { event: { type: 7, name: 'TURN LEFT', time: Math.floor(Date.now()/1000), uuid: '0e039178' }, access_event_id: 15, device_id: 123, time: Math.floor(Date.now()/1000) } },
+      { path: 'operation_mode', body: { operation_mode: { mode: 0, mode_name: 'DEFAULT', time: Math.floor(Date.now()/1000), last_offline: 0, exception_mode: 'none' }, device_id: 123 } },
+      { path: 'device_is_alive', body: { access_logs: 0, device_id: 123, time: Math.floor(Date.now()/1000) } },
+      { path: 'door', body: { door: { id: 1, open: true }, access_event_id: 15, device_id: 123, time: Math.floor(Date.now()/1000) } },
+      { path: 'secbox', body: { secbox: { id: 122641794705028910, open: true }, access_event_id: 15 } },
+      { path: 'access_photo', body: { device_id: '123', time: Math.floor(Date.now()/1000), portal_id: '1', identifier_id: '0', event: '7', user_id: '0', access_photo: '' } }
+    ];
+
+    const results = [];
+    for (const s of samples) {
+      const url = `${base}/api/notifications/${s.path}`;
+      try {
+        const r = await axios.post(url, s.body, { headers: { 'Content-Type': 'application/json' }, timeout: 5000 });
+        results.push({ path: s.path, status: r.status, ok: true });
+      } catch (err) {
+        const detail = err.response && err.response.data ? err.response.data : err.message || String(err);
+        results.push({ path: s.path, status: err.response ? err.response.status : null, ok: false, detail });
+      }
+    }
+
+    // read last events from monitor_events table if exists
+    const events = await new Promise((resolve) => {
+      db.all("SELECT id, path, device_id, created_at, payload FROM monitor_events ORDER BY id DESC LIMIT 50", (err, rows) => {
+        if (err) return resolve({ error: String(err) });
+        resolve(rows);
+      });
+    });
+
+    res.json({ posted: results, storedEvents: events });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`Server listening on http://localhost:${port}`));
