@@ -11,26 +11,92 @@
         .device-section { background: white; margin: 20px 0; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .device-title { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
         .user-card { background: #ecf0f1; margin: 10px 0; padding: 15px; border-radius: 5px; border-left: 4px solid #3498db; }
-        .user-name { font-weight: bold; color: #2c3e50; }
+        .user-name { font-weight: bold; color: #2c3e50; margin-bottom: 10px; }
+        .session { margin: 5px 0; padding: 5px; background: #d5dbdb; border-radius: 3px; }
         .times { margin-top: 10px; }
         .entry { color: #27ae60; }
         .exit { color: #e74c3c; }
         .total { font-weight: bold; color: #f39c12; }
         .announcements { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
         .announcement { margin: 5px 0; }
-        .refresh { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
-        .refresh:hover { background: #2980b9; }
+        .filters { background: white; margin: 20px 0; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-wrap: wrap; gap: 15px; align-items: center; }
+        .filters label { margin-right: 5px; }
+        .filters input[type="time"] { padding: 5px; border: 1px solid #ccc; border-radius: 3px; }
     </style>
     <script>
         function refreshPage() {
             location.reload();
         }
         setInterval(refreshPage, 60000); // Refresh every 60 seconds
+
+        function applyFilters() {
+            const showOpen = document.getElementById('showOpen').checked;
+            const showClosed = document.getElementById('showClosed').checked;
+            const entryMin = document.getElementById('entryMin').value;
+            const entryMax = document.getElementById('entryMax').value;
+            const exitMin = document.getElementById('exitMin').value;
+            const exitMax = document.getElementById('exitMax').value;
+
+            const sessions = document.querySelectorAll('.session');
+            sessions.forEach(session => {
+                const entryText = session.querySelector('.entry').textContent.replace('Entrada: ', '');
+                const exitText = session.querySelector('.exit').textContent.replace('Salida: ', '');
+
+                const isOpen = exitText === 'En progreso';
+                const isClosed = !isOpen;
+
+                let show = true;
+
+                // Filtro por tipo de sesión
+                if (!showOpen && isOpen) show = false;
+                if (!showClosed && isClosed) show = false;
+
+                // Filtro por hora de entrada
+                if (entryMin && entryText !== 'N/A') {
+                    const entryTime = parseTime(entryText);
+                    if (entryTime < entryMin) show = false;
+                }
+                if (entryMax && entryText !== 'N/A') {
+                    const entryTime = parseTime(entryText);
+                    if (entryTime > entryMax) show = false;
+                }
+
+                // Filtro por hora de salida
+                if (exitMin && exitText !== 'En progreso' && exitText !== 'N/A') {
+                    const exitTime = parseTime(exitText);
+                    if (exitTime < exitMin) show = false;
+                }
+                if (exitMax && exitText !== 'En progreso' && exitText !== 'N/A') {
+                    const exitTime = parseTime(exitText);
+                    if (exitTime > exitMax) show = false;
+                }
+
+                session.style.display = show ? 'block' : 'none';
+            });
+        }
+
+        function parseTime(timeStr) {
+            // timeStr es "HH:MM DD/MM/YYYY", extraer HH:MM
+            const parts = timeStr.split(' ');
+            return parts[0]; // HH:MM
+        }
+
+        // Aplicar filtros al cargar
+        window.onload = applyFilters;
     </script>
 </head>
 <body>
     <div class="container">
         <h1>Control ID Dashboard</h1>
+        <div class="filters">
+            <label><input type="checkbox" id="showOpen" checked> Mostrar sesiones abiertas</label>
+            <label><input type="checkbox" id="showClosed" checked> Mostrar sesiones cerradas</label>
+            <label>Hora entrada min: <input type="time" id="entryMin"></label>
+            <label>Hora entrada max: <input type="time" id="entryMax"></label>
+            <label>Hora salida min: <input type="time" id="exitMin"></label>
+            <label>Hora salida max: <input type="time" id="exitMax"></label>
+            <button class="refresh" onclick="applyFilters()">Aplicar Filtros</button>
+        </div>
         <button class="refresh" onclick="refreshPage()">Actualizar</button>
 
         {% for device_data in devices_data %}
@@ -39,11 +105,13 @@
             {% for user in device_data.users %}
             <div class="user-card">
                 <div class="user-name">{{ user.name or 'Usuario ' + user.user_id|string }}</div>
-                <div class="times">
-                    <span class="entry">Entrada: {{ user.entry_time }}</span> |
-                    <span class="exit">Salida: {{ user.exit_time }}</span> |
-                    <span class="total">Total: {{ user.total_hours }} horas</span>
+                {% for session in user.sessions %}
+                <div class="session">
+                    <span class="entry">Entrada: {{ session.entry_time }}</span> |
+                    <span class="exit">Salida: {{ session.exit_time }}</span> |
+                    <span class="total">Total: {{ session.total_hours }} horas</span>
                 </div>
+                {% endfor %}
             </div>
             {% endfor %}
         </div>
