@@ -28,6 +28,7 @@ class User:
     pin: Optional[str] = None
 
 
+
 @dataclass
 class AccessLog:
     id: int
