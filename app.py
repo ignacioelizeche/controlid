@@ -43,26 +43,43 @@ def process_logs_for_dashboard(logs):
             sessions = []
             i = 0
             while i < len(user_logs):
-                entry_time = user_logs[i].time
+                entry_ts = user_logs[i].time
                 if i + 1 < len(user_logs):
-                    exit_time = user_logs[i + 1].time
-                    total_seconds = exit_time - entry_time
+                    exit_ts = user_logs[i + 1].time
+                    total_seconds = exit_ts - entry_ts
                     total_hours = round(total_seconds / 3600, 2)
                     sessions.append({
-                        "entry_time": format_time(entry_time),
-                        "exit_time": format_time(exit_time),
+                        "entry_ts": entry_ts,
+                        "exit_ts": exit_ts,
+                        "entry_time": format_time(entry_ts),
+                        "exit_time": format_time(exit_ts),
                         "total_hours": total_hours
                     })
-                    announcements.append(f"Usuario {user['user_id']} salió a las {format_time(exit_time)} del dispositivo {device['name']}")
+                    announcements.append(f"Usuario {user['user_id']} salió a las {format_time(exit_ts)} del dispositivo {device['name']}")
                     i += 2
                 else:
                     sessions.append({
-                        "entry_time": format_time(entry_time),
+                        "entry_ts": entry_ts,
+                        "exit_ts": None,
+                        "entry_time": format_time(entry_ts),
                         "exit_time": "En progreso",
                         "total_hours": "N/A"
                     })
                     i += 1
-            user["sessions"] = sessions
+            # Fusionar sesiones si el gap entre salida y siguiente entrada es < 1 minuto
+            merged_sessions = []
+            for session in sessions:
+                if session["exit_ts"] is None:
+                    merged_sessions.append(session)
+                    continue
+                if not merged_sessions or (session["entry_ts"] - merged_sessions[-1]["exit_ts"]) >= 60:
+                    merged_sessions.append(session)
+                else:
+                    # Fusionar: actualizar la salida de la sesión anterior
+                    merged_sessions[-1]["exit_ts"] = session["exit_ts"]
+                    merged_sessions[-1]["exit_time"] = format_time(session["exit_ts"])
+                    merged_sessions[-1]["total_hours"] = round((session["exit_ts"] - merged_sessions[-1]["entry_ts"]) / 3600, 2)
+            user["sessions"] = merged_sessions
             del user["logs"]  # Limpiar logs
         device["users"] = list(device["users"].values())
     return list(devices_data.values()), announcements[-10:]  # Últimas 10 anuncios
