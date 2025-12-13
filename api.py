@@ -5,25 +5,25 @@ from controls import open_relay
 from typing import List, Any
 
 
-def get_device(ip: str) -> Device:
+def get_device(device_id: int) -> Device:
     """
-    Obtiene un dispositivo por IP.
+    Obtiene un dispositivo por ID interno.
     """
-    return device_manager.get_device(ip)
+    return device_manager.get_device(device_id)
 
 
-def add_device(ip: str, login: str, password: str) -> Device:
+def add_device(name: str, ip: str, login: str, password: str) -> Device:
     """
     Registra un nuevo dispositivo.
     """
-    return device_manager.add_device(ip, login, password)
+    return device_manager.add_device(name, ip, login, password)
 
 
-def remove_device(ip: str) -> None:
+def remove_device(device_id: int) -> None:
     """
-    Elimina un dispositivo.
+    Elimina un dispositivo por ID.
     """
-    device_manager.remove_device(ip)
+    device_manager.remove_device(device_id)
 
 
 def list_devices() -> List[Device]:

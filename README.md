@@ -34,10 +34,11 @@ API modular en Python para interactuar con dispositivos de Control ID usando RES
 from api import add_device, get_device, login, load_objects, logout, open_relay
 
 # Registrar dispositivo
-add_device("192.168.100.22", "admin", "password")
+device = add_device("Dispositivo Principal", "192.168.100.22", "admin", "password")
+print(f"Dispositivo registrado con ID {device.id}")
 
-# Obtener dispositivo
-device = get_device("192.168.100.22")
+# Obtener dispositivo por ID
+device = get_device(1)
 
 # Login
 login(device)
@@ -69,14 +70,14 @@ Accede a la documentación interactiva en http://127.0.0.1:8000/docs
 
 ### Endpoints
 
-- `POST /devices`: Registrar dispositivo
+- `POST /devices`: Registrar dispositivo (body: name, ip, login, password)
 - `GET /devices`: Listar dispositivos
-- `DELETE /devices/{ip}`: Eliminar dispositivo
-- `POST /devices/{ip}/login`: Login
-- `POST /devices/{ip}/logout`: Logout
-- `GET /devices/{ip}/session`: Verificar sesión
-- `GET /devices/{ip}/objects/{object_name}`: Cargar objetos (users, access_logs, etc.). Para access_logs, por defecto filtra desde el inicio del día actual; opcional query param `start_time` (Unix timestamp) para filtrar desde otra hora.
-- `POST /devices/{ip}/control/relay`: Liberar relé
+- `DELETE /devices/{device_id}`: Eliminar dispositivo
+- `POST /devices/{device_id}/login`: Login
+- `POST /devices/{device_id}/logout`: Logout
+- `GET /devices/{device_id}/session`: Verificar sesión
+- `GET /devices/{device_id}/objects/{object_name}`: Cargar objetos (users, access_logs, etc.). Para access_logs, por defecto filtra desde el inicio del día actual; opcional query param `start_time` (Unix timestamp) para filtrar desde otra hora.
+- `POST /devices/{device_id}/control/relay`: Liberar relé
 
 ## Módulos
 
