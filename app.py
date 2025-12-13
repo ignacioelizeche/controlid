@@ -41,32 +41,27 @@ def process_logs_for_dashboard(logs):
         for user in device["users"].values():
             user_logs = sorted(user["logs"], key=lambda l: l.time)  # Ordenar por tiempo
             sessions = []
-            current_entry = None
-            for log in user_logs:
-                if log.event == 7:  # Entrada
-                    if current_entry is None:  # Nueva sesión si no hay entrada abierta
-                        current_entry = log.time
-                    # Si ya hay entrada abierta, ignorar o manejar como error, pero por simplicidad, asumir nueva sesión
-                elif log.event == 8:  # Salida
-                    if current_entry is not None:
-                        exit_time = log.time
-                        total_seconds = exit_time - current_entry
-                        total_hours = round(total_seconds / 3600, 2)
-                        sessions.append({
-                            "entry_time": format_time(current_entry),
-                            "exit_time": format_time(exit_time),
-                            "total_hours": total_hours
-                        })
-                        announcements.append(f"Usuario {user['user_id']} salió a las {format_time(exit_time)} del dispositivo {device['name']}")
-                        current_entry = None  # Cerrar sesión
-                    # Si no hay entrada, ignorar salida huérfana
-            # Si queda entrada abierta
-            if current_entry is not None:
-                sessions.append({
-                    "entry_time": format_time(current_entry),
-                    "exit_time": "En progreso",
-                    "total_hours": "N/A"
-                })
+            i = 0
+            while i < len(user_logs):
+                entry_time = user_logs[i].time
+                if i + 1 < len(user_logs):
+                    exit_time = user_logs[i + 1].time
+                    total_seconds = exit_time - entry_time
+                    total_hours = round(total_seconds / 3600, 2)
+                    sessions.append({
+                        "entry_time": format_time(entry_time),
+                        "exit_time": format_time(exit_time),
+                        "total_hours": total_hours
+                    })
+                    announcements.append(f"Usuario {user['user_id']} salió a las {format_time(exit_time)} del dispositivo {device['name']}")
+                    i += 2
+                else:
+                    sessions.append({
+                        "entry_time": format_time(entry_time),
+                        "exit_time": "En progreso",
+                        "total_hours": "N/A"
+                    })
+                    i += 1
             user["sessions"] = sessions
             del user["logs"]  # Limpiar logs
         device["users"] = list(device["users"].values())
