@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import pytz
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -9,9 +10,14 @@ from objects import OBJECT_CLASSES
 from monitor import start_monitoring, stop_monitoring
 from database import get_new_logs
 
+# Zona horaria local (Argentina)
+local_tz = pytz.timezone('America/Argentina/Buenos_Aires')
+
 def format_time(timestamp):
-    dt = datetime.fromtimestamp(timestamp)  # Asume que el timestamp ya está en hora local
-    return dt.strftime("%H:%M %d/%m/%Y")
+    # Asumir que timestamp es UTC, convertir a local
+    dt_utc = datetime.utcfromtimestamp(timestamp)
+    dt_local = dt_utc.replace(tzinfo=pytz.utc).astimezone(local_tz)
+    return dt_local.strftime("%H:%M %d/%m/%Y")
 
 def process_logs_for_dashboard(logs):
     devices_data = {}
