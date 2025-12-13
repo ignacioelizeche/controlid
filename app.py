@@ -4,6 +4,7 @@ from typing import List, Any, Optional
 from api import add_device, get_device, remove_device, list_devices, login, logout, is_session_valid, load_objects, open_relay
 from devices import Device
 from objects import OBJECT_CLASSES
+from monitor import start_monitoring, stop_monitoring
 
 app = FastAPI(title="Control ID API", description="API para interactuar con dispositivos Control ID", version="1.0.0")
 
@@ -89,5 +90,21 @@ async def control_relay(device_id: int, relay: RelayRequest):
         return {"message": f"Relé {relay.relay_id} liberado en dispositivo '{device.name}' (ID {device_id})"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/devices/{device_id}/monitor/start")
+async def start_device_monitoring(device_id: int):
+    try:
+        start_monitoring(device_id)
+        return {"message": f"Monitoreo iniciado para dispositivo {device_id}"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/devices/{device_id}/monitor/stop")
+async def stop_device_monitoring(device_id: int):
+    try:
+        stop_monitoring(device_id)
+        return {"message": f"Monitoreo detenido para dispositivo {device_id}"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

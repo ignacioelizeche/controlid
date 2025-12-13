@@ -77,7 +77,8 @@ Accede a la documentación interactiva en http://127.0.0.1:8000/docs
 - `POST /devices/{device_id}/logout`: Logout
 - `GET /devices/{device_id}/session`: Verificar sesión
 - `GET /devices/{device_id}/objects/{object_name}`: Cargar objetos (users, access_logs, etc.). Para access_logs, por defecto filtra desde el inicio del día actual; opcional query param `start_time` (Unix timestamp) para filtrar desde otra hora.
-- `POST /devices/{device_id}/control/relay`: Liberar relé
+- `POST /devices/{device_id}/monitor/start`: Iniciar monitoreo automático de logs cada 1 minuto
+- `POST /devices/{device_id}/monitor/stop`: Detener monitoreo
 
 ## Módulos
 
@@ -88,8 +89,18 @@ Accede a la documentación interactiva en http://127.0.0.1:8000/docs
 - `api.py`: Interfaz principal de la librería.
 - `app.py`: Servidor FastAPI.
 
-## Extensión
+## Base de Datos
 
-Para agregar nuevos objetos, define una dataclass en `objects.py` y agrégala al diccionario `OBJECT_CLASSES`.
+La API incluye una base de datos SQLite (`access_logs.db`) para almacenar logs de acceso de manera persistente. El monitoreo automático guarda solo logs nuevos para evitar duplicados.
 
-Para nuevas funcionalidades, agrega funciones en los módulos correspondientes y endpoints en `app.py`.
+## Monitoreo Automático
+
+Puedes iniciar un monitoreo automático que cada 1 minuto:
+1. Verifica la sesión del dispositivo.
+2. Carga los `access_logs`.
+3. Guarda solo los logs nuevos en la base de datos.
+
+Ejemplo:
+```bash
+curl -X 'POST' 'http://127.0.0.1:8000/devices/1/monitor/start'
+```

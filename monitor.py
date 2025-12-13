@@ -1,0 +1,44 @@
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+import logging
+from api import get_device, login, load_objects, is_session_valid
+from database import get_last_log_id, save_logs, init_db
+from objects import AccessLog
+
+logger = logging.getLogger(__name__)
+
+scheduler = AsyncIOScheduler()
+
+async def fetch_and_save_logs(device_id: int):
+    """Función que se ejecuta cada minuto para obtener y guardar logs."""
+    try:
+        device = get_device(device_id)
+        if not is_session_valid(device):
+            login(device)
+        # Obtener el último ID guardado
+        last_id = get_last_log_id(device_id)
+        # Cargar logs desde el último ID +1, pero como la API no soporta offset por ID, cargar todos y filtrar
+        # Para eficiencia, cargar con start_time basado en el último time
+        # Pero por simplicidad, cargar todos y filtrar nuevos
+        logs = load_objects(device, "access_logs")
+        new_logs = [log for log in logs if last_id is None or log.id > last_id]
+        if new_logs:
+            save_logs(new_logs, device_id)
+            logger.info(f"Guardados {len(new_logs)} nuevos logs para dispositivo {device_id}")
+        else:
+            logger.info(f"No hay nuevos logs para dispositivo {device_id}")
+    except Exception as e:
+        logger.error(f"Error al obtener logs para dispositivo {device_id}: {e}")
+
+def start_monitoring(device_id: int):
+    """Inicia el monitoreo para un dispositivo."""
+    init_db()
+    scheduler.add_job(fetch_and_save_logs, trigger=IntervalTrigger(minutes=1), args=[device_id], id=f"monitor_{device_id}")
+    if not scheduler.running:
+        scheduler.start()
+    logger.info(f"Monitoreo iniciado para dispositivo {device_id}")
+
+def stop_monitoring(device_id: int):
+    """Detiene el monitoreo para un dispositivo."""
+    scheduler.remove_job(f"monitor_{device_id}")
+    logger.info(f"Monitoreo detenido para dispositivo {device_id}")
