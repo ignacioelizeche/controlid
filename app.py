@@ -34,15 +34,13 @@ def process_logs_for_dashboard(logs):
         if user_id not in users:
             users[user_id] = {"user_id": user_id, "name": None, "entry_time": None, "exit_time": None, "total_hours": 0}
         user = users[user_id]
-        if user["entry_time"] is None or log.time < user["entry_time"]:
-            user["entry_time"] = log.time
-        if user["exit_time"] is None or log.time > user["exit_time"]:
-            user["exit_time"] = log.time
         # Asumiendo que event 7 es entrada, 8 salida
         if log.event == 7:
-            user["entry_time"] = log.time
+            if user["entry_time"] is None or log.time < user["entry_time"]:
+                user["entry_time"] = log.time
         elif log.event == 8:
-            user["exit_time"] = log.time
+            if user["exit_time"] is None or log.time > user["exit_time"]:
+                user["exit_time"] = log.time
             announcements.append(f"Usuario {user_id} salió a las {format_time(log.time)} del dispositivo {device_name}")
     # Calcular total horas
     for device in devices_data.values():
@@ -50,8 +48,10 @@ def process_logs_for_dashboard(logs):
             if user["entry_time"] and user["exit_time"]:
                 total_seconds = user["exit_time"] - user["entry_time"]
                 user["total_hours"] = round(total_seconds / 3600, 2)
+            else:
+                user["total_hours"] = "N/A"
             user["entry_time"] = format_time(user["entry_time"]) if user["entry_time"] else "N/A"
-            user["exit_time"] = format_time(user["exit_time"]) if user["exit_time"] else "N/A"
+            user["exit_time"] = format_time(user["exit_time"]) if user["exit_time"] else "En progreso"
         device["users"] = list(device["users"].values())
     return list(devices_data.values()), announcements[-10:]  # Últimas 10 anuncios
 
