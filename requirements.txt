@@ -4,3 +4,4 @@ uvicorn
 apscheduler
 jinja2
 pytz
+python-dotenv

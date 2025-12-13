@@ -89,6 +89,19 @@ def process_logs_for_dashboard(logs):
 app = FastAPI(title="Control ID API", description="API para interactuar con dispositivos Control ID", version="1.0.0")
 templates = Jinja2Templates(directory="templates")
 
+@app.on_event("startup")
+async def startup_event():
+    """Al iniciar la API, hace login en todos los dispositivos y activa el monitoreo."""
+    devices = list_devices()
+    for device in devices:
+        try:
+            if device.session_id is None:
+                login(device)
+            start_monitoring(device.id)
+            print(f"Dispositivo {device.id} ({device.name}) iniciado correctamente.")
+        except Exception as e:
+            print(f"Error al iniciar dispositivo {device.id} ({device.name}): {e}")
+
 class DeviceRequest(BaseModel):
     name: str
     ip: str
