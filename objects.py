@@ -23,6 +23,7 @@ class User:
     image_timestamp: Optional[int] = None
     last_access: Optional[int] = None
     panic_password: Optional[str] = None
+    panic_salt: Optional[str] = None
     card: Optional[str] = None
     pin: Optional[str] = None
 
