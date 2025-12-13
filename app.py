@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import pytz
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -10,11 +9,8 @@ from objects import OBJECT_CLASSES
 from monitor import start_monitoring, stop_monitoring
 from database import get_new_logs
 
-# Asumiendo zona horaria, por ejemplo UTC
-tz = pytz.UTC
-
 def format_time(timestamp):
-    dt = datetime.fromtimestamp(timestamp, tz)
+    dt = datetime.fromtimestamp(timestamp)  # Asume que el timestamp ya está en hora local
     return dt.strftime("%H:%M %d/%m/%Y")
 
 def process_logs_for_dashboard(logs):
