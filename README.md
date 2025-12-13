@@ -68,6 +68,8 @@ uvicorn app:app --reload
 
 Accede a la documentación interactiva en http://127.0.0.1:8000/docs
 
+Dashboard: http://127.0.0.1:8000/ (muestra logs de acceso en tiempo real)
+
 ### Endpoints
 
 - `POST /devices`: Registrar dispositivo (body: name, ip, login, password)

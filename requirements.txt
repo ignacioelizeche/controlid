@@ -2,3 +2,5 @@ requests
 fastapi
 uvicorn
 apscheduler
+jinja2
+pytz

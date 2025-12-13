@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control ID Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 20px; background-color: #f4f4f4; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { text-align: center; color: #333; }
+        .device-section { background: white; margin: 20px 0; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .device-title { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .user-card { background: #ecf0f1; margin: 10px 0; padding: 15px; border-radius: 5px; border-left: 4px solid #3498db; }
+        .user-name { font-weight: bold; color: #2c3e50; }
+        .times { margin-top: 10px; }
+        .entry { color: #27ae60; }
+        .exit { color: #e74c3c; }
+        .total { font-weight: bold; color: #f39c12; }
+        .announcements { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .announcement { margin: 5px 0; }
+        .refresh { background: #3498db; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; }
+        .refresh:hover { background: #2980b9; }
+    </style>
+    <script>
+        function refreshPage() {
+            location.reload();
+        }
+        setInterval(refreshPage, 60000); // Refresh every 60 seconds
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Control ID Dashboard</h1>
+        <button class="refresh" onclick="refreshPage()">Actualizar</button>
+
+        {% for device_data in devices_data %}
+        <div class="device-section">
+            <h2 class="device-title">{{ device_data.name }} (ID: {{ device_data.id }})</h2>
+            {% for user in device_data.users %}
+            <div class="user-card">
+                <div class="user-name">{{ user.name or 'Usuario ' + user.user_id|string }}</div>
+                <div class="times">
+                    <span class="entry">Entrada: {{ user.entry_time }}</span> |
+                    <span class="exit">Salida: {{ user.exit_time }}</span> |
+                    <span class="total">Total: {{ user.total_hours }} horas</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+
+        <div class="announcements">
+            <h3>🔔 Anuncios Recientes</h3>
+            {% for announcement in announcements %}
+            <div class="announcement">{{ announcement }}</div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>

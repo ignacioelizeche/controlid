@@ -1,12 +1,62 @@
-from fastapi import FastAPI, HTTPException
+from datetime import datetime, timedelta
+import pytz
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import List, Any, Optional
 from api import add_device, get_device, remove_device, list_devices, login, logout, is_session_valid, load_objects, open_relay
 from devices import Device
 from objects import OBJECT_CLASSES
 from monitor import start_monitoring, stop_monitoring
+from database import get_new_logs
+
+# Asumiendo zona horaria, por ejemplo UTC
+tz = pytz.UTC
+
+def format_time(timestamp):
+    dt = datetime.fromtimestamp(timestamp, tz)
+    return dt.strftime("%H:%M %d/%m/%Y")
+
+def process_logs_for_dashboard(logs):
+    devices_data = {}
+    announcements = []
+    for log in logs:
+        device_id = log.device_internal_id
+        try:
+            device = get_device(device_id)
+            device_name = device.name
+        except ValueError:
+            device_name = f"Dispositivo {device_id}"
+        if device_id not in devices_data:
+            devices_data[device_id] = {"id": device_id, "name": device_name, "users": {}}
+        users = devices_data[device_id]["users"]
+        user_id = log.user_id
+        if user_id not in users:
+            users[user_id] = {"user_id": user_id, "name": None, "entry_time": None, "exit_time": None, "total_hours": 0}
+        user = users[user_id]
+        if user["entry_time"] is None or log.time < user["entry_time"]:
+            user["entry_time"] = log.time
+        if user["exit_time"] is None or log.time > user["exit_time"]:
+            user["exit_time"] = log.time
+        # Asumiendo que event 7 es entrada, 8 salida
+        if log.event == 7:
+            user["entry_time"] = log.time
+        elif log.event == 8:
+            user["exit_time"] = log.time
+            announcements.append(f"Usuario {user_id} salió a las {format_time(log.time)} del dispositivo {device_name}")
+    # Calcular total horas
+    for device in devices_data.values():
+        for user in device["users"].values():
+            if user["entry_time"] and user["exit_time"]:
+                total_seconds = user["exit_time"] - user["entry_time"]
+                user["total_hours"] = round(total_seconds / 3600, 2)
+            user["entry_time"] = format_time(user["entry_time"]) if user["entry_time"] else "N/A"
+            user["exit_time"] = format_time(user["exit_time"]) if user["exit_time"] else "N/A"
+        device["users"] = list(device["users"].values())
+    return list(devices_data.values()), announcements[-10:]  # Últimas 10 anuncios
 
 app = FastAPI(title="Control ID API", description="API para interactuar con dispositivos Control ID", version="1.0.0")
+templates = Jinja2Templates(directory="templates")
 
 class DeviceRequest(BaseModel):
     name: str
@@ -108,3 +158,17 @@ async def stop_device_monitoring(device_id: int):
         return {"message": f"Monitoreo detenido para dispositivo {device_id}"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.get("/")
+async def dashboard(request: Request):
+    # Obtener logs de todos los dispositivos
+    logs = []
+    devices = list_devices()
+    for device in devices:
+        device_logs = get_new_logs(device.id, None)
+        for log in device_logs:
+            log.device_internal_id = device.id  # Agregar para identificar
+        logs.extend(device_logs)
+    # Procesar datos
+    devices_data, announcements = process_logs_for_dashboard(logs)
+    return templates.TemplateResponse("index.html", {"request": request, "devices_data": devices_data, "announcements": announcements})
