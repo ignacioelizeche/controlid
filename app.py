@@ -7,9 +7,10 @@ from api import add_device, get_device, remove_device, list_devices, login, logo
 from devices import Device
 from objects import OBJECT_CLASSES
 from monitor import start_monitoring, stop_monitoring
-from database import get_new_logs, get_all_logs
+from database import get_new_logs, get_all_logs, save_sent_log, get_unsent_logs
 import os
 import requests
+import time
 #dotenv
 from dotenv import load_dotenv
 load_dotenv()  # Cargar variables de .env
@@ -235,21 +236,44 @@ async def dashboard(request: Request):
 
 @app.post("/send_all_logs")
 async def send_all_logs():
-    """Envía todos los logs guardados en la DB a MONITOR_URL de forma manual."""
-    logs = get_all_logs()
+    """Envía todos los logs no enviados exitosamente a MONITOR_URL de forma manual."""
+    logs = get_unsent_logs()
     if not logs:
-        return {"message": "No hay logs para enviar"}
+        return {"message": "No hay logs no enviados para enviar"}
     
     monitor_url = os.getenv("MONITOR_URL")
     if not monitor_url:
         raise HTTPException(status_code=500, detail="MONITOR_URL no configurada en .env")
     
     data = {
-        "objects": [convert_log_to_agilapps_format(log.__dict__) for log in logs]
+        "ControlIdLogs": {
+            "objects": [convert_log_to_agilapps_format(log.__dict__) for log in logs]
+        }
     }
     try:
         response = requests.post(monitor_url, json=data, timeout=30)
         response.raise_for_status()
-        return {"message": f"Enviados {len(logs)} logs a {monitor_url}"}
+        # Parsear la respuesta y guardar el estado de envío
+        resp_data = response.json()
+        sent_count = 0
+        error_count = 0
+        if "Messages" in resp_data:
+            for msg in resp_data["Messages"]:
+                log_id = int(msg["Description"])
+                response_id = msg["Id"]
+                status = "success" if response_id == "0" else "error"
+                sent_at = int(time.time())
+                save_sent_log(log_id, sent_at, status, response_id)
+                if status == "success":
+                    sent_count += 1
+                else:
+                    error_count += 1
+        return {"message": f"Enviados {sent_count} logs exitosamente, {error_count} errores a {monitor_url}"}
     except requests.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar logs: {e}")
+
+@app.get("/unsent_logs")
+async def get_unsent_logs_endpoint():
+    """Obtiene los logs que no han sido enviados exitosamente."""
+    logs = get_unsent_logs()
+    return {"unsent_logs": [log.__dict__ for log in logs]}

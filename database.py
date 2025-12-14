@@ -29,6 +29,16 @@ def init_db():
             device_internal_id INTEGER
         )
     ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sent_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            log_id INTEGER,
+            sent_at INTEGER,
+            status TEXT,
+            response_id TEXT,
+            FOREIGN KEY (log_id) REFERENCES access_logs (id)
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -103,5 +113,49 @@ def get_new_logs(device_internal_id: int, last_id: Optional[int]) -> List[Access
             id=row[0], time=row[1], event=row[2], device_id=row[3], identifier_id=row[4], user_id=row[5],
             portal_id=row[6], identification_rule_id=row[7], qrcode_value=row[8], pin_value=row[9],
             card_value=row[10], confidence=row[11], mask=row[12], log_type_id=row[13], component_id=row[14]
+        ))
+    return logs
+
+def save_sent_log(log_id: int, sent_at: int, status: str, response_id: str):
+    """Guarda el registro de envío de un log."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO sent_logs (log_id, sent_at, status, response_id)
+        VALUES (?, ?, ?, ?)
+    ''', (log_id, sent_at, status, response_id))
+    conn.commit()
+    conn.close()
+
+def get_unsent_logs() -> List[AccessLog]:
+    """Obtiene logs que no han sido enviados exitosamente."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT a.id, a.time, a.event, a.device_id, a.identifier_id, a.user_id, a.portal_id, a.identification_rule_id, a.qrcode_value, a.pin_value, a.card_value, a.confidence, a.mask, a.log_type_id, a.component_id
+        FROM access_logs a
+        LEFT JOIN sent_logs s ON a.id = s.log_id AND s.status = 'success'
+        WHERE s.log_id IS NULL
+    ''')
+    rows = cursor.fetchall()
+    conn.close()
+    logs = []
+    for row in rows:
+        logs.append(AccessLog(
+            id=row[0],
+            time=row[1],
+            event=row[2],
+            device_id=row[3],
+            identifier_id=row[4],
+            user_id=row[5],
+            portal_id=row[6],
+            identification_rule_id=row[7],
+            qrcode_value=row[8],
+            pin_value=row[9],
+            card_value=row[10],
+            confidence=row[11],
+            mask=row[12],
+            log_type_id=row[13],
+            component_id=row[14]
         ))
     return logs

@@ -5,9 +5,9 @@ import os
 import requests
 from dotenv import load_dotenv
 from api import get_device, login, load_objects, is_session_valid
-from database import get_last_log_id, save_logs, init_db
+from database import get_last_log_id, save_logs, init_db, save_sent_log
 from objects import AccessLog
-from datetime import datetime
+import time
 
 load_dotenv()  # Cargar variables de .env
 MONITOR_URL = os.getenv("MONITOR_URL")
@@ -56,14 +56,24 @@ async def fetch_and_save_logs(device_id: int):
             # Enviar a la URL externa
             if MONITOR_URL:
                 data = {
-                    #"device_id": device_id,
-                    #"device_name": device.name,
-                    "objects": [convert_log_to_agilapps_format(log.__dict__) for log in new_logs]
+                    "ControlIdLogs": {
+                        "objects": [convert_log_to_agilapps_format(log.__dict__) for log in new_logs]
+                    }
                 }
                 try:
                     response = requests.post(MONITOR_URL, json=data, timeout=10)
                     response.raise_for_status()
                     logger.info(f"Enviados {len(new_logs)} logs a {MONITOR_URL}")
+                    # Parsear la respuesta y guardar el estado de envío
+                    resp_data = response.json()
+                    if "Messages" in resp_data:
+                        for msg in resp_data["Messages"]:
+                            log_id = int(msg["Description"])
+                            response_id = msg["Id"]
+                            status = "success" if response_id == "0" else "error"
+                            sent_at = int(time.time())
+                            save_sent_log(log_id, sent_at, status, response_id)
+                            logger.info(f"Log {log_id} enviado con status {status}")
                 except requests.RequestException as e:
                     logger.error(f"Error al enviar logs a {MONITOR_URL}: {e}")
         else:
