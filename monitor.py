@@ -24,7 +24,12 @@ def convert_log_to_agilapps_format(log_dict):
             # Convertir timestamp Unix a ISO string
             dt = datetime.fromtimestamp(value)
             converted[key] = dt.isoformat()
-        elif isinstance(value, (int, float)):
+        elif isinstance(value, int):
+            if value == 0:
+                converted[key] = "0.00000"
+            else:
+                converted[key] = str(value)
+        elif isinstance(value, float):
             converted[key] = f"{value:.5f}"
         elif value is None:
             converted[key] = "0.00000"  # Para números None
