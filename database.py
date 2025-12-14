@@ -41,6 +41,34 @@ def get_last_log_id(device_internal_id: int) -> Optional[int]:
     conn.close()
     return result[0] if result and result[0] else None
 
+def get_all_logs() -> List[AccessLog]:
+    """Obtiene todos los logs guardados en la base de datos."""
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, time, event, device_id, identifier_id, user_id, portal_id, identification_rule_id, qrcode_value, pin_value, card_value, confidence, mask, log_type_id, component_id FROM access_logs")
+    rows = cursor.fetchall()
+    conn.close()
+    logs = []
+    for row in rows:
+        logs.append(AccessLog(
+            id=row[0],
+            time=row[1],
+            event=row[2],
+            device_id=row[3],
+            identifier_id=row[4],
+            user_id=row[5],
+            portal_id=row[6],
+            identification_rule_id=row[7],
+            qrcode_value=row[8],
+            pin_value=row[9],
+            card_value=row[10],
+            confidence=row[11],
+            mask=row[12],
+            log_type_id=row[13],
+            component_id=row[14]
+        ))
+    return logs
+
 def save_logs(logs: List[AccessLog], device_internal_id: int):
     """Guarda los logs en la base de datos, evitando duplicados."""
     if not logs:

@@ -7,7 +7,7 @@ from api import add_device, get_device, remove_device, list_devices, login, logo
 from devices import Device
 from objects import OBJECT_CLASSES
 from monitor import start_monitoring, stop_monitoring
-from database import get_new_logs
+from database import get_new_logs, get_all_logs
 
 def format_time(timestamp):
     dt = datetime.fromtimestamp(timestamp)  # Asume que el timestamp ya está en la zona correcta (local o UTC según el sistema)
@@ -210,3 +210,24 @@ async def dashboard(request: Request):
     # Procesar datos
     devices_data, announcements = process_logs_for_dashboard(logs)
     return templates.TemplateResponse("index.html", {"request": request, "devices_data": devices_data, "announcements": announcements})
+
+@app.post("/send_all_logs")
+async def send_all_logs():
+    """Envía todos los logs guardados en la DB a MONITOR_URL de forma manual."""
+    logs = get_all_logs()
+    if not logs:
+        return {"message": "No hay logs para enviar"}
+    
+    monitor_url = os.getenv("MONITOR_URL")
+    if not monitor_url:
+        raise HTTPException(status_code=500, detail="MONITOR_URL no configurada en .env")
+    
+    data = {
+        "objects": [log.__dict__ for log in logs]
+    }
+    try:
+        response = requests.post(monitor_url, json=data, timeout=30)
+        response.raise_for_status()
+        return {"message": f"Enviados {len(logs)} logs a {monitor_url}"}
+    except requests.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error al enviar logs: {e}")
