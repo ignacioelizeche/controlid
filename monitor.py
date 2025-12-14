@@ -34,9 +34,9 @@ async def fetch_and_save_logs(device_id: int):
             # Enviar a la URL externa
             if MONITOR_URL:
                 data = {
-                    "device_id": device_id,
-                    "device_name": device.name,
-                    "logs": [log.__dict__ for log in new_logs]
+                    #"device_id": device_id,
+                    #"device_name": device.name,
+                    "objects": [log.__dict__ for log in new_logs]
                 }
                 try:
                     response = requests.post(MONITOR_URL, json=data, timeout=10)
