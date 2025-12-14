@@ -258,16 +258,18 @@ async def send_all_logs():
         sent_count = 0
         error_count = 0
         if "Messages" in resp_data:
-            for msg in resp_data["Messages"]:
-                log_id = int(msg["Description"])
-                response_id = msg["Id"]
-                status = "success" if response_id == "0" else "error"
-                sent_at = int(time.time())
-                save_sent_log(log_id, sent_at, status, response_id)
-                if status == "success":
-                    sent_count += 1
-                else:
-                    error_count += 1
+            for i, msg in enumerate(resp_data["Messages"]):
+                if i < len(logs):
+                    log = logs[i]
+                    log_id = log.id
+                    response_id = msg["Id"]
+                    status = "success" if response_id == "0" else "error"
+                    sent_at = int(time.time())
+                    save_sent_log(log_id, sent_at, status, response_id)
+                    if status == "success":
+                        sent_count += 1
+                    else:
+                        error_count += 1
         return {"message": f"Enviados {sent_count} logs exitosamente, {error_count} errores a {monitor_url}"}
     except requests.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar logs: {e}")

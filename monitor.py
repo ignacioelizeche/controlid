@@ -67,13 +67,15 @@ async def fetch_and_save_logs(device_id: int):
                     # Parsear la respuesta y guardar el estado de envío
                     resp_data = response.json()
                     if "Messages" in resp_data:
-                        for msg in resp_data["Messages"]:
-                            log_id = int(msg["Description"])
-                            response_id = msg["Id"]
-                            status = "success" if response_id == "0" else "error"
-                            sent_at = int(time.time())
-                            save_sent_log(log_id, sent_at, status, response_id)
-                            logger.info(f"Log {log_id} enviado con status {status}")
+                        for i, msg in enumerate(resp_data["Messages"]):
+                            if i < len(new_logs):
+                                log = new_logs[i]
+                                log_id = log.id
+                                response_id = msg["Id"]
+                                status = "success" if response_id == "0" else "error"
+                                sent_at = int(time.time())
+                                save_sent_log(log_id, sent_at, status, response_id)
+                                logger.info(f"Log {log_id} enviado con status {status}")
                 except requests.RequestException as e:
                     logger.error(f"Error al enviar logs a {MONITOR_URL}: {e}")
         else:
