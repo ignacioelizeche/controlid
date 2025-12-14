@@ -8,10 +8,27 @@ from devices import Device
 from objects import OBJECT_CLASSES
 from monitor import start_monitoring, stop_monitoring
 from database import get_new_logs, get_all_logs
+import os
+import requests
+#dotenv
+from dotenv import load_dotenv
+load_dotenv()  # Cargar variables de .env
 
-def format_time(timestamp):
-    dt = datetime.fromtimestamp(timestamp)  # Asume que el timestamp ya está en la zona correcta (local o UTC según el sistema)
-    return dt.strftime("%H:%M %d/%m/%Y")
+def convert_log_to_agilapps_format(log_dict):
+    """Convierte el dict del log al formato esperado por AgilApps."""
+    converted = {}
+    for key, value in log_dict.items():
+        if key == 'time':
+            # Convertir timestamp Unix a ISO string
+            dt = datetime.fromtimestamp(value)
+            converted[key] = dt.isoformat()
+        elif isinstance(value, (int, float)):
+            converted[key] = f"{value:.5f}"
+        elif value is None:
+            converted[key] = "0.00000"  # Para números None
+        else:
+            converted[key] = str(value) if value else ""  # Para strings, "" si vacío
+    return converted
 
 def process_logs_for_dashboard(logs):
     devices_data = {}
@@ -223,7 +240,7 @@ async def send_all_logs():
         raise HTTPException(status_code=500, detail="MONITOR_URL no configurada en .env")
     
     data = {
-        "objects": [log.__dict__ for log in logs]
+        "objects": [convert_log_to_agilapps_format(log.__dict__) for log in logs]
     }
     try:
         response = requests.post(monitor_url, json=data, timeout=30)

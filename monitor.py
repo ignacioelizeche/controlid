@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from api import get_device, login, load_objects, is_session_valid
 from database import get_last_log_id, save_logs, init_db
 from objects import AccessLog
+from datetime import datetime
 
 load_dotenv()  # Cargar variables de .env
 MONITOR_URL = os.getenv("MONITOR_URL")
@@ -14,6 +15,22 @@ MONITOR_URL = os.getenv("MONITOR_URL")
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
+
+def convert_log_to_agilapps_format(log_dict):
+    """Convierte el dict del log al formato esperado por AgilApps."""
+    converted = {}
+    for key, value in log_dict.items():
+        if key == 'time':
+            # Convertir timestamp Unix a ISO string
+            dt = datetime.fromtimestamp(value)
+            converted[key] = dt.isoformat()
+        elif isinstance(value, (int, float)):
+            converted[key] = f"{value:.5f}"
+        elif value is None:
+            converted[key] = "0.00000"  # Para números None
+        else:
+            converted[key] = str(value) if value else ""  # Para strings, "" si vacío
+    return converted
 
 async def fetch_and_save_logs(device_id: int):
     """Función que se ejecuta cada minuto para obtener y guardar logs."""
@@ -36,7 +53,7 @@ async def fetch_and_save_logs(device_id: int):
                 data = {
                     #"device_id": device_id,
                     #"device_name": device.name,
-                    "objects": [log.__dict__ for log in new_logs]
+                    "objects": [convert_log_to_agilapps_format(log.__dict__) for log in new_logs]
                 }
                 try:
                     response = requests.post(MONITOR_URL, json=data, timeout=10)
