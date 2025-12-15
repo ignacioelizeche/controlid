@@ -8,7 +8,7 @@ from api import get_device, login, load_objects, is_session_valid
 from database import save_logs, init_db, save_sent_log, get_last_log_time
 from objects import AccessLog
 import time
-import datetime
+from datetime import datetime
 
 load_dotenv()  # Cargar variables de .env
 MONITOR_URL = os.getenv("MONITOR_URL")
@@ -23,7 +23,7 @@ def convert_log_to_agilapps_format(log_dict):
     for key, value in log_dict.items():
         if key == 'time':
             # Convertir timestamp Unix a ISO string
-            dt = datetime.datetime.fromtimestamp(value)
+            dt = datetime.fromtimestamp(value)
             converted[key] = dt.isoformat()
         elif isinstance(value, int):
             if value == 0:
