@@ -10,6 +10,9 @@ import httpx
 
 from api import list_devices, get_device, login, is_session_valid, load_objects
 from database import init_db, save_logs, get_last_log_time, save_sent_log
+from dotenv import load_dotenv
+
+load_dotenv()  # Cargar variables de .env
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
