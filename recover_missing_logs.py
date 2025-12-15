@@ -2,11 +2,14 @@ import asyncio
 import time
 import logging
 import argparse
+import os
 from datetime import datetime
 from typing import Optional
 
+import httpx
+
 from api import list_devices, get_device, login, is_session_valid, load_objects
-from database import init_db, save_logs, get_last_log_time
+from database import init_db, save_logs, get_last_log_time, save_sent_log
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -20,7 +23,7 @@ def parse_datetime_to_ts(s: str) -> int:
     # Si ya es un entero (timestamp)
     if s.isdigit():
         return int(s)
-    fmts = ["%d/%m/%Y %H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"]
+    fmts = ["%d/%m/%Y %H:%M", "%d/%m/%Y %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"]
     for fmt in fmts:
         try:
             dt = datetime.strptime(s, fmt)
@@ -79,6 +82,55 @@ async def recover_for_device(device, start_ts: Optional[int] = None, end_ts: Opt
     try:
         save_logs(objects, device.id)
         logger.info(f"Guardados {len(objects)} logs para dispositivo {device.id}")
+        # Enviar a MONITOR_URL si está configurada
+        monitor_url = os.getenv("MONITOR_URL")
+        if monitor_url:
+            # Convertir logs al formato esperado
+            def convert_log_to_agilapps_format(log_dict):
+                converted = {}
+                for key, value in log_dict.items():
+                    if key == 'time':
+                        try:
+                            dt = datetime.fromtimestamp(value)
+                            converted[key] = dt.isoformat()
+                        except Exception:
+                            converted[key] = ""
+                    elif isinstance(value, int):
+                        if value == 0:
+                            converted[key] = "0.00000"
+                        else:
+                            converted[key] = str(value)
+                    elif isinstance(value, float):
+                        converted[key] = f"{value:.5f}"
+                    elif value is None:
+                        converted[key] = "0.00000"
+                    else:
+                        converted[key] = str(value) if value else ""
+                return converted
+
+            data = {
+                "ControlIdLogs": {
+                    "objects": [convert_log_to_agilapps_format(log.__dict__) for log in objects]
+                }
+            }
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(monitor_url, json=data, timeout=30.0)
+                response.raise_for_status()
+                resp_data = response.json()
+                if "Messages" in resp_data:
+                    for i, msg in enumerate(resp_data["Messages"]):
+                        if i < len(objects):
+                            log = objects[i]
+                            log_id = getattr(log, 'id', None)
+                            response_id = msg.get("Id")
+                            status = "success" if response_id == "0" else "error"
+                            sent_at = int(time.time())
+                            if log_id is not None:
+                                save_sent_log(log_id, sent_at, status, response_id)
+                                logger.info(f"Log {log_id} enviado con status {status}")
+            except httpx.RequestError as e:
+                logger.error(f"Error al enviar logs a {monitor_url}: {e}")
         return len(objects)
     except Exception as e:
         logger.error(f"Error al guardar logs para dispositivo {device.id}: {e}")

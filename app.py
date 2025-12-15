@@ -37,6 +37,17 @@ def convert_log_to_agilapps_format(log_dict):
             converted[key] = str(value) if value else ""  # Para strings, "" si vacío
     return converted
 
+
+def format_time(ts: Optional[int]) -> str:
+    """Formatea un timestamp UNIX a 'HH:MM DD/MM/YYYY'."""
+    if ts is None:
+        return "N/A"
+    try:
+        dt = datetime.fromtimestamp(int(ts))
+        return dt.strftime("%H:%M %d/%m/%Y")
+    except Exception:
+        return "N/A"
+    
 def process_logs_for_dashboard(logs):
     devices_data = {}
     announcements = []
