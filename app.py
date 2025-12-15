@@ -128,6 +128,9 @@ class DeviceRequest(BaseModel):
 class RelayRequest(BaseModel):
     relay_id: int
 
+class CustomLogsRequest(BaseModel):
+    objects: List[dict]
+
 @app.post("/devices", response_model=dict)
 async def create_device(device: DeviceRequest):
     try:
@@ -286,6 +289,36 @@ async def send_all_logs():
         return {"message": f"Enviados {sent_count} logs exitosamente, {error_count} errores a {monitor_url}"}
     except requests.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar logs: {e}")
+
+@app.post("/send_custom_logs")
+async def send_custom_logs(request: CustomLogsRequest):
+    """Envía logs personalizados proporcionados en el JSON a MONITOR_URL."""
+    monitor_url = os.getenv("MONITOR_URL")
+    if not monitor_url:
+        raise HTTPException(status_code=500, detail="MONITOR_URL no configurada en .env")
+    
+    data = {
+        "ControlIdLogs": {
+            "objects": [convert_log_to_agilapps_format(obj) for obj in request.objects]
+        }
+    }
+    try:
+        response = requests.post(monitor_url, json=data, timeout=30)
+        response.raise_for_status()
+        # Parsear la respuesta
+        resp_data = response.json()
+        sent_count = 0
+        error_count = 0
+        if "Messages" in resp_data:
+            for msg in resp_data["Messages"]:
+                response_id = msg["Id"]
+                if response_id == "0":
+                    sent_count += 1
+                else:
+                    error_count += 1
+        return {"message": f"Enviados {sent_count} logs personalizados exitosamente, {error_count} errores a {monitor_url}"}
+    except requests.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error al enviar logs personalizados: {e}")
 
 @app.get("/unsent_logs")
 async def get_unsent_logs_endpoint():
