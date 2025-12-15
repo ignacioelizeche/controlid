@@ -6,7 +6,7 @@ from typing import List, Any, Optional
 from api import add_device, get_device, remove_device, list_devices, login, logout, is_session_valid, load_objects, open_relay
 from devices import Device
 from objects import OBJECT_CLASSES
-from monitor import start_monitoring, stop_monitoring
+from monitor import start_monitoring, stop_monitoring, fetch_and_save_logs
 from database import get_new_logs, get_all_logs, save_sent_log, get_unsent_logs
 import os
 import requests
@@ -219,6 +219,19 @@ async def stop_device_monitoring(device_id: int):
         return {"message": f"Monitoreo detenido para dispositivo {device_id}"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/fetch_logs")
+async def manual_fetch_logs():
+    """Obtiene logs manualmente de todos los dispositivos."""
+    devices = list_devices()
+    total_fetched = 0
+    for device in devices:
+        try:
+            await fetch_and_save_logs(device.id)
+            total_fetched += 1
+        except Exception as e:
+            print(f"Error al obtener logs para dispositivo {device.id}: {e}")
+    return {"message": f"Logs obtenidos manualmente para {total_fetched} dispositivos"}
 
 @app.get("/")
 async def dashboard(request: Request):
