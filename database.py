@@ -42,11 +42,11 @@ def init_db():
     conn.commit()
     conn.close()
 
-def get_last_log_id(device_internal_id: int) -> Optional[int]:
-    """Obtiene el último ID de log guardado para el dispositivo."""
+def get_last_log_time(device_internal_id: int) -> Optional[int]:
+    """Obtiene el tiempo del último log guardado para el dispositivo."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
-    cursor.execute("SELECT MAX(id) FROM access_logs WHERE device_internal_id = ?", (device_internal_id,))
+    cursor.execute("SELECT MAX(time) FROM access_logs WHERE device_internal_id = ?", (device_internal_id,))
     result = cursor.fetchone()
     conn.close()
     return result[0] if result and result[0] else None
@@ -126,20 +126,6 @@ def save_sent_log(log_id: int, sent_at: int, status: str, response_id: str):
     ''', (log_id, sent_at, status, response_id))
     conn.commit()
     conn.close()
-
-def get_last_sent_log_id(device_internal_id: int) -> Optional[int]:
-    """Obtiene el último log_id enviado exitosamente para el dispositivo."""
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT MAX(s.log_id)
-        FROM sent_logs s
-        JOIN access_logs a ON s.log_id = a.id
-        WHERE s.status = 'success' AND a.device_internal_id = ?
-    ''', (device_internal_id,))
-    result = cursor.fetchone()
-    conn.close()
-    return result[0] if result and result[0] else None
 
 def get_unsent_logs() -> List[AccessLog]:
     """Obtiene logs que no han sido enviados exitosamente."""

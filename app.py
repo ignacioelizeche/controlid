@@ -6,7 +6,7 @@ from typing import List, Any, Optional
 from api import add_device, get_device, remove_device, list_devices, login, logout, is_session_valid, load_objects, open_relay
 from devices import Device
 from objects import OBJECT_CLASSES
-from monitor import start_monitoring, stop_monitoring, fetch_and_save_logs, fetch_and_save_logs
+from monitor import start_monitoring, stop_monitoring
 from database import get_new_logs, get_all_logs, save_sent_log, get_unsent_logs
 import os
 import requests
@@ -208,9 +208,7 @@ async def control_relay(device_id: int, relay: RelayRequest):
 async def start_device_monitoring(device_id: int):
     try:
         start_monitoring(device_id)
-        # Hacer un pull inmediato
-        await fetch_and_save_logs(device_id)
-        return {"message": f"Monitoreo iniciado y pull realizado para dispositivo {device_id}"}
+        return {"message": f"Monitoreo iniciado para dispositivo {device_id}"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
