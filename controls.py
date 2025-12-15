@@ -1,4 +1,4 @@
-import requests
+import httpx
 from devices import Device
 import logging
 
@@ -6,9 +6,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def open_relay(device: Device, relay_id: int) -> None:
+async def open_relay(device: Device, relay_id: int) -> None:
     """
-    Libera un relé.
+    Libera un relé (async).
     """
     if device.session_id is None:
         raise ValueError("No hay sesión activa para este dispositivo.")
@@ -22,10 +22,11 @@ def open_relay(device: Device, relay_id: int) -> None:
         "Content-Type": "application/json"
     }
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload, headers=headers, timeout=10.0)
         response.raise_for_status()
         logger.info(f"Relé {relay_id} liberado en dispositivo {device.ip}")
-    except requests.RequestException as e:
+    except httpx.RequestError as e:
         logger.error(f"Error al liberar relé {relay_id} en {device.ip}: {e}")
         raise ValueError(f"Error al liberar relé: {e}")
 

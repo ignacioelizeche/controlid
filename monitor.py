@@ -2,7 +2,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import logging
 import os
-import requests
+import httpx
 from dotenv import load_dotenv
 from api import get_device, login, load_objects, is_session_valid
 from database import save_logs, init_db, save_sent_log, get_last_log_time
@@ -42,13 +42,13 @@ async def fetch_initial_logs(device_id: int):
     """Función que se ejecuta al iniciar el monitoreo para obtener logs desde el último tiempo guardado."""
     try:
         device = get_device(device_id)
-        if not is_session_valid(device):
-            login(device)
+        if not await is_session_valid(device):
+            await login(device)
         # Obtener el último tiempo guardado
         last_time = get_last_log_time(device_id)
         # Cargar logs desde el último tiempo +1
         start_time = last_time + 1 if last_time else None
-        logs = load_objects(device, "access_logs", start_time=start_time)
+        logs = await load_objects(device, "access_logs", start_time=start_time)
         new_logs = logs  # Asumiendo que load_objects ya filtra por start_time
         if new_logs:
             save_logs(new_logs, device_id)
@@ -61,7 +61,8 @@ async def fetch_initial_logs(device_id: int):
                     }
                 }
                 try:
-                    response = requests.post(MONITOR_URL, json=data, timeout=10)
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(MONITOR_URL, json=data, timeout=10.0)
                     response.raise_for_status()
                     logger.info(f"Enviados {len(new_logs)} logs iniciales a {MONITOR_URL}")
                     # Parsear la respuesta
@@ -76,7 +77,7 @@ async def fetch_initial_logs(device_id: int):
                                 sent_at = int(time.time())
                                 save_sent_log(log_id, sent_at, status, response_id)
                                 logger.info(f"Log inicial {log_id} enviado con status {status}")
-                except requests.RequestException as e:
+                except httpx.RequestError as e:
                     logger.error(f"Error al enviar logs iniciales a {MONITOR_URL}: {e}")
         else:
             logger.info(f"No hay logs iniciales para dispositivo {device_id}")
@@ -87,13 +88,13 @@ async def fetch_and_save_logs(device_id: int):
     """Función que se ejecuta cada minuto para obtener y guardar logs desde el último tiempo guardado."""
     try:
         device = get_device(device_id)
-        if not is_session_valid(device):
-            login(device)
+        if not await is_session_valid(device):
+            await login(device)
         # Obtener el último tiempo guardado
         last_time = get_last_log_time(device_id)
         # Cargar logs desde el último tiempo +1
         start_time = last_time + 1 if last_time else None
-        logs = load_objects(device, "access_logs", start_time=start_time)
+        logs = await load_objects(device, "access_logs", start_time=start_time)
         new_logs = logs  # Asumiendo que load_objects filtra por start_time
         if new_logs:
             save_logs(new_logs, device_id)
@@ -106,7 +107,8 @@ async def fetch_and_save_logs(device_id: int):
                     }
                 }
                 try:
-                    response = requests.post(MONITOR_URL, json=data, timeout=10)
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(MONITOR_URL, json=data, timeout=10.0)
                     response.raise_for_status()
                     logger.info(f"Enviados {len(new_logs)} logs a {MONITOR_URL}")
                     # Parsear la respuesta y guardar el estado de envío
@@ -121,7 +123,7 @@ async def fetch_and_save_logs(device_id: int):
                                 sent_at = int(time.time())
                                 save_sent_log(log_id, sent_at, status, response_id)
                                 logger.info(f"Log {log_id} enviado con status {status}")
-                except requests.RequestException as e:
+                except httpx.RequestError as e:
                     logger.error(f"Error al enviar logs a {MONITOR_URL}: {e}")
         else:
             logger.info(f"No hay nuevos logs para dispositivo {device_id}")
@@ -141,5 +143,8 @@ def start_monitoring(device_id: int):
 
 def stop_monitoring(device_id: int):
     """Detiene el monitoreo para un dispositivo."""
-    scheduler.remove_job(f"monitor_{device_id}")
-    logger.info(f"Monitoreo detenido para dispositivo {device_id}")
+    try:
+        scheduler.remove_job(f"monitor_{device_id}")
+        logger.info(f"Monitoreo detenido para dispositivo {device_id}")
+    except Exception:
+        logger.warning(f"No se encontró job de monitoreo para device {device_id}")

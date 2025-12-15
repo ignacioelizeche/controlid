@@ -6,14 +6,15 @@ from typing import List, Any, Optional
 from api import add_device, get_device, remove_device, list_devices, login, logout, is_session_valid, load_objects, open_relay
 from devices import Device
 from objects import OBJECT_CLASSES
-from monitor import start_monitoring, stop_monitoring, fetch_and_save_logs
+from monitor import start_monitoring, stop_monitoring
 from database import get_new_logs, get_all_logs, save_sent_log, get_unsent_logs
 import os
-import requests
+import httpx
 import time
 #dotenv
 from dotenv import load_dotenv
 load_dotenv()  # Cargar variables de .env
+
 
 def convert_log_to_agilapps_format(log_dict):
     """Convierte el dict del log al formato esperado por AgilApps."""
@@ -113,7 +114,7 @@ async def startup_event():
     for device in devices:
         try:
             if device.session_id is None:
-                login(device)
+                await login(device)
             start_monitoring(device.id)
             print(f"Dispositivo {device.id} ({device.name}) iniciado correctamente.")
         except Exception as e:
@@ -127,9 +128,6 @@ class DeviceRequest(BaseModel):
 
 class RelayRequest(BaseModel):
     relay_id: int
-
-class CustomLogsRequest(BaseModel):
-    objects: List[dict]
 
 @app.post("/devices", response_model=dict)
 async def create_device(device: DeviceRequest):
@@ -156,7 +154,7 @@ async def delete_device(device_id: int):
 async def device_login(device_id: int):
     try:
         device = get_device(device_id)
-        login(device)
+        await login(device)
         return {"message": f"Login exitoso para dispositivo '{device.name}' (ID {device_id})"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -167,7 +165,7 @@ async def device_login(device_id: int):
 async def device_logout(device_id: int):
     try:
         device = get_device(device_id)
-        logout(device)
+        await logout(device)
         return {"message": f"Logout exitoso para dispositivo '{device.name}' (ID {device_id})"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -178,7 +176,7 @@ async def device_logout(device_id: int):
 async def check_session(device_id: int):
     try:
         device = get_device(device_id)
-        valid = is_session_valid(device)
+        valid = await is_session_valid(device)
         return {"valid": valid}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -189,7 +187,7 @@ async def get_objects(device_id: int, object_name: str, start_time: Optional[int
         raise HTTPException(status_code=400, detail=f"Objeto '{object_name}' no soportado")
     try:
         device = get_device(device_id)
-        objects = load_objects(device, object_name, start_time)
+        objects = await load_objects(device, object_name, start_time)
         return {"objects": [obj.__dict__ for obj in objects]}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -200,7 +198,7 @@ async def get_objects(device_id: int, object_name: str, start_time: Optional[int
 async def control_relay(device_id: int, relay: RelayRequest):
     try:
         device = get_device(device_id)
-        open_relay(device, relay.relay_id)
+        await open_relay(device, relay.relay_id)
         return {"message": f"Relé {relay.relay_id} liberado en dispositivo '{device.name}' (ID {device_id})"}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
@@ -222,19 +220,6 @@ async def stop_device_monitoring(device_id: int):
         return {"message": f"Monitoreo detenido para dispositivo {device_id}"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/fetch_logs")
-async def manual_fetch_logs():
-    """Obtiene logs manualmente de todos los dispositivos."""
-    devices = list_devices()
-    total_fetched = 0
-    for device in devices:
-        try:
-            await fetch_and_save_logs(device.id)
-            total_fetched += 1
-        except Exception as e:
-            print(f"Error al obtener logs para dispositivo {device.id}: {e}")
-    return {"message": f"Logs obtenidos manualmente para {total_fetched} dispositivos"}
 
 @app.get("/")
 async def dashboard(request: Request):
@@ -267,7 +252,8 @@ async def send_all_logs():
         }
     }
     try:
-        response = requests.post(monitor_url, json=data, timeout=30)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(monitor_url, json=data, timeout=30.0)
         response.raise_for_status()
         # Parsear la respuesta y guardar el estado de envío
         resp_data = response.json()
@@ -287,38 +273,8 @@ async def send_all_logs():
                     else:
                         error_count += 1
         return {"message": f"Enviados {sent_count} logs exitosamente, {error_count} errores a {monitor_url}"}
-    except requests.RequestException as e:
+    except httpx.RequestError as e:
         raise HTTPException(status_code=500, detail=f"Error al enviar logs: {e}")
-
-@app.post("/send_custom_logs")
-async def send_custom_logs(request: CustomLogsRequest):
-    """Envía logs personalizados proporcionados en el JSON a MONITOR_URL."""
-    monitor_url = os.getenv("MONITOR_URL")
-    if not monitor_url:
-        raise HTTPException(status_code=500, detail="MONITOR_URL no configurada en .env")
-    
-    data = {
-        "ControlIdLogs": {
-            "objects": [convert_log_to_agilapps_format(obj) for obj in request.objects]
-        }
-    }
-    try:
-        response = requests.post(monitor_url, json=data, timeout=30)
-        response.raise_for_status()
-        # Parsear la respuesta
-        resp_data = response.json()
-        sent_count = 0
-        error_count = 0
-        if "Messages" in resp_data:
-            for msg in resp_data["Messages"]:
-                response_id = msg["Id"]
-                if response_id == "0":
-                    sent_count += 1
-                else:
-                    error_count += 1
-        return {"message": f"Enviados {sent_count} logs personalizados exitosamente, {error_count} errores a {monitor_url}"}
-    except requests.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Error al enviar logs personalizados: {e}")
 
 @app.get("/unsent_logs")
 async def get_unsent_logs_endpoint():

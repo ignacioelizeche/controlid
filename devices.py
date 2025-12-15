@@ -2,7 +2,7 @@ import json
 import os
 from typing import Dict, Optional
 from dataclasses import dataclass
-import requests
+from filelock import FileLock
 
 
 @dataclass
@@ -24,10 +24,15 @@ class Device:
 
     @classmethod
     def from_dict(cls, data: Dict[str, str]) -> 'Device':
+        # Esperamos que `data` contenga al menos `id`, `name`, `ip`, `login`, `password`.
         return cls(
-            ip=data["ip"],
-            login=data["login"],
-            password=data["password"]
+            id=int(data.get("id")),
+            name=data.get("name"),
+            ip=data.get("ip"),
+            login=data.get("login"),
+            password=data.get("password"),
+            device_id=data.get("device_id"),
+            session_id=data.get("session_id") if data.get("session_id") is not None else None
         )
 
 
@@ -60,16 +65,20 @@ class DeviceManager:
         return list(self.devices.values())
 
     def save_devices(self) -> None:
-        data = {device.id: {"id": device.id, "name": device.name, "ip": device.ip, "login": device.login, "password": device.password, "device_id": device.device_id} for device in self.devices.values()}
-        with open(self.storage_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4)
+        data = {str(device.id): {"id": device.id, "name": device.name, "ip": device.ip, "login": device.login, "password": device.password, "device_id": device.device_id, "session_id": device.session_id} for device in self.devices.values()}
+        lock = FileLock(self.storage_file + ".lock")
+        with lock:
+            with open(self.storage_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=4)
 
     def load_devices(self) -> None:
         if os.path.exists(self.storage_file):
-            with open(self.storage_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            lock = FileLock(self.storage_file + ".lock")
+            with lock:
+                with open(self.storage_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
             for device_data in data.values():
-                device = Device(**device_data)
+                device = Device.from_dict(device_data)
                 self.devices[device.id] = device
                 if device.id >= self.next_id:
                     self.next_id = device.id + 1

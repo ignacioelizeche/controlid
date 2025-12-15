@@ -1,7 +1,8 @@
-requests
+httpx
 fastapi
 uvicorn
 apscheduler
 jinja2
 pytz
 python-dotenv
+filelock

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional
-import requests
+import httpx
 from devices import Device
 import logging
 import datetime
@@ -96,7 +96,7 @@ OBJECT_CLASSES = {
 }
 
 
-def load_objects(device: Device, object_name: str, start_time: Optional[int] = None) -> List[Any]:
+async def load_objects(device: Device, object_name: str, start_time: Optional[int] = None) -> List[Any]:
     """
     Recupera datos del objeto especificado.
     start_time: Para access_logs, filtra por time >= start_time (Unix timestamp). Si no se especifica, filtra desde el inicio del día actual.
@@ -125,7 +125,8 @@ def load_objects(device: Device, object_name: str, start_time: Optional[int] = N
         "Content-Type": "application/json"
     }
     try:
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload, headers=headers, timeout=30.0)
         response.raise_for_status()
         data = response.json()
         if object_name not in data:
@@ -137,7 +138,7 @@ def load_objects(device: Device, object_name: str, start_time: Optional[int] = N
         objects = [cls(**item) for item in objects_data]
         logger.info(f"Cargados {len(objects)} objetos '{object_name}' desde {device.ip}")
         return objects
-    except requests.RequestException as e:
+    except httpx.RequestError as e:
         logger.error(f"Error al cargar objetos '{object_name}' desde {device.ip}: {e}")
         raise ValueError(f"Error al cargar objetos: {e}")
     except (KeyError, TypeError) as e:
