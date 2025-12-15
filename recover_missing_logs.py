@@ -90,25 +90,34 @@ async def recover_for_device(device, start_ts: Optional[int] = None, end_ts: Opt
         if monitor_url:
             # Convertir logs al formato esperado
             def convert_log_to_agilapps_format(log_dict):
+                """Convierte un objeto log a formato JSON esperado por AgilApps:
+                - `time` -> ISO string
+                - los numéricos se envían como números
+                - strings nulos -> ""
+                - numéricos nulos -> 0
+                """
                 converted = {}
                 for key, value in log_dict.items():
                     if key == 'time':
                         try:
-                            dt = datetime.fromtimestamp(value)
+                            dt = datetime.fromtimestamp(int(value))
                             converted[key] = dt.isoformat()
                         except Exception:
-                            converted[key] = ""
-                    elif isinstance(value, int):
-                        if value == 0:
-                            converted[key] = "0.00000"
+                            try:
+                                converted[key] = str(value) if value else ""
+                            except Exception:
+                                converted[key] = ""
+                    else:
+                        if isinstance(value, (int, float)):
+                            converted[key] = value
+                        elif value is None:
+                            # Inferir si el campo debería ser numérico por su nombre
+                            if any(substr in key for substr in ("id", "value", "confidence", "card", "mask", "type", "component")):
+                                converted[key] = 0
+                            else:
+                                converted[key] = ""
                         else:
                             converted[key] = str(value)
-                    elif isinstance(value, float):
-                        converted[key] = f"{value:.5f}"
-                    elif value is None:
-                        converted[key] = "0.00000"
-                    else:
-                        converted[key] = str(value) if value else ""
                 return converted
 
             data = {
