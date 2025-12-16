@@ -156,12 +156,12 @@ async def recover_for_device(device, start_ts: Optional[int] = None, end_ts: Opt
                                     logger.info(f"Log {log_id} enviado con status {status} (device {device.id})")
                         sent_any = True
                     else:
-                        # No Messages -> asumir OK para todos y guardar como success
+                        # No Messages -> asumir OK para todos, guardar y loggear cada registro
                         for log in objects:
                             log_id = getattr(log, 'id', None)
                             if log_id is not None:
                                 save_sent_log(log_id, int(time.time()), "success", "")
-                        logger.info(f"Envío a {monitor_url} OK (sin Messages) para dispositivo {device.id}")
+                                logger.info(f"Log {log_id} enviado con status success (device {device.id})")
                         sent_any = True
 
                     # Si llegamos aquí, romper el ciclo de reintentos
