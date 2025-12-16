@@ -8,7 +8,7 @@ from api import get_device, login, load_objects, is_session_valid
 from database import save_logs, init_db, save_sent_log, get_last_log_time
 from objects import AccessLog
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 load_dotenv()  # Cargar variables de .env
 MONITOR_URL = os.getenv("MONITOR_URL")
@@ -22,9 +22,12 @@ def convert_log_to_agilapps_format(log_dict):
     converted = {}
     for key, value in log_dict.items():
         if key == 'time':
-            # Convertir timestamp Unix a ISO string
-            dt = datetime.fromtimestamp(value)
-            converted[key] = dt.isoformat()
+            # Convertir timestamp Unix a ISO string (interpretado como UTC)
+            try:
+                dt = datetime.fromtimestamp(int(value), tz=timezone.utc)
+                converted[key] = dt.isoformat()
+            except Exception:
+                converted[key] = ""
         elif isinstance(value, int):
             if value == 0:
                 converted[key] = "0.00000"

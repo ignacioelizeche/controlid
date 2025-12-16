@@ -3,7 +3,7 @@ import time
 import logging
 import argparse
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -100,7 +100,7 @@ async def recover_for_device(device, start_ts: Optional[int] = None, end_ts: Opt
                 for key, value in log_dict.items():
                     if key == 'time':
                         try:
-                            dt = datetime.fromtimestamp(int(value))
+                            dt = datetime.fromtimestamp(int(value), tz=timezone.utc)
                             converted[key] = dt.isoformat()
                         except Exception:
                             try:

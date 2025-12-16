@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -21,9 +21,12 @@ def convert_log_to_agilapps_format(log_dict):
     converted = {}
     for key, value in log_dict.items():
         if key == 'time':
-            # Convertir timestamp Unix a ISO string
-            dt = datetime.fromtimestamp(value)
-            converted[key] = dt.isoformat()
+            # Convertir timestamp Unix a ISO string (interpreta como UTC)
+            try:
+                dt = datetime.fromtimestamp(int(value), tz=timezone.utc)
+                converted[key] = dt.isoformat()
+            except Exception:
+                converted[key] = ""
         elif isinstance(value, int):
             if value == 0:
                 converted[key] = "0.00000"
@@ -43,7 +46,7 @@ def format_time(ts: Optional[int]) -> str:
     if ts is None:
         return "N/A"
     try:
-        dt = datetime.fromtimestamp(int(ts))
+        dt = datetime.fromtimestamp(int(ts), tz=timezone.utc)
         return dt.strftime("%H:%M %d/%m/%Y")
     except Exception:
         return "N/A"
