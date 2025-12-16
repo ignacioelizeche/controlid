@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
+import json
 
 from api import list_devices, get_device, login, is_session_valid, load_objects
 from database import init_db, save_logs, get_last_log_time, save_sent_log
@@ -140,8 +141,20 @@ async def recover_for_device(device, start_ts: Optional[int] = None, end_ts: Opt
                     try:
                         resp_data = response.json()
                     except Exception:
-                        # Si la respuesta no es JSON, marcar todos como enviados
-                        resp_data = {}
+                        # Si la respuesta no es JSON, guardar el texto en un objeto simple
+                        resp_data = {"text": response.text, "status_code": response.status_code}
+
+                    # Guardar respuesta en JSON por dispositivo (archivo fijo y con timestamp)
+                    try:
+                        ts_file = int(time.time())
+                        base_fname = f"response_Device{device.id}.json"
+                        ts_fname = f"response_Device{device.id}_{ts_file}.json"
+                        with open(base_fname, 'w', encoding='utf-8') as f:
+                            json.dump(resp_data, f, ensure_ascii=False, indent=2)
+                        with open(ts_fname, 'w', encoding='utf-8') as f:
+                            json.dump(resp_data, f, ensure_ascii=False, indent=2)
+                    except Exception as e:
+                        logger.warning(f"No se pudo guardar archivo de respuesta para device {device.id}: {e}")
 
                     if "Messages" in resp_data and isinstance(resp_data["Messages"], list):
                         for i, msg in enumerate(resp_data["Messages"]):
@@ -173,6 +186,14 @@ async def recover_for_device(device, start_ts: Optional[int] = None, end_ts: Opt
                         retry_delay *= 2
                     else:
                         logger.error(f"Fallo al enviar logs a {monitor_url} para dispositivo {device.id} después de {max_retries} intentos")
+                        # Guardar info del error en un archivo para análisis
+                        try:
+                            err_ts = int(time.time())
+                            err_fname = f"response_Device{device.id}_error_{err_ts}.json"
+                            with open(err_fname, 'w', encoding='utf-8') as f:
+                                json.dump({"error": str(e), "attempts": attempt, "device": device.id}, f, ensure_ascii=False, indent=2)
+                        except Exception:
+                            pass
             # Pequeña pausa para evitar saturar el servicio al iterar dispositivos
             await asyncio.sleep(0.5)
         return len(objects)
