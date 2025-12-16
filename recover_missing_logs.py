@@ -125,24 +125,56 @@ async def recover_for_device(device, start_ts: Optional[int] = None, end_ts: Opt
                     "objects": [convert_log_to_agilapps_format(log.__dict__) for log in objects]
                 }
             }
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(monitor_url, json=data, timeout=30.0)
-                response.raise_for_status()
-                resp_data = response.json()
-                if "Messages" in resp_data:
-                    for i, msg in enumerate(resp_data["Messages"]):
-                        if i < len(objects):
-                            log = objects[i]
+            # Enviar con reintentos y guardar estado por cada log
+            max_retries = 3
+            retry_delay = 2
+            attempt = 0
+            sent_any = False
+            while attempt < max_retries:
+                attempt += 1
+                try:
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(monitor_url, json=data, timeout=30.0)
+                    response.raise_for_status()
+                    resp_data = {}
+                    try:
+                        resp_data = response.json()
+                    except Exception:
+                        # Si la respuesta no es JSON, marcar todos como enviados
+                        resp_data = {}
+
+                    if "Messages" in resp_data and isinstance(resp_data["Messages"], list):
+                        for i, msg in enumerate(resp_data["Messages"]):
+                            if i < len(objects):
+                                log = objects[i]
+                                log_id = getattr(log, 'id', None)
+                                response_id = msg.get("Id")
+                                status = "success" if str(response_id) == "0" else "error"
+                                sent_at = int(time.time())
+                                if log_id is not None:
+                                    save_sent_log(log_id, sent_at, status, response_id)
+                                    logger.info(f"Log {log_id} enviado con status {status} (device {device.id})")
+                        sent_any = True
+                    else:
+                        # No Messages -> asumir OK para todos y guardar como success
+                        for log in objects:
                             log_id = getattr(log, 'id', None)
-                            response_id = msg.get("Id")
-                            status = "success" if response_id == "0" else "error"
-                            sent_at = int(time.time())
                             if log_id is not None:
-                                save_sent_log(log_id, sent_at, status, response_id)
-                                logger.info(f"Log {log_id} enviado con status {status}")
-            except httpx.RequestError as e:
-                logger.error(f"Error al enviar logs a {monitor_url}: {e}")
+                                save_sent_log(log_id, int(time.time()), "success", "")
+                        logger.info(f"Envío a {monitor_url} OK (sin Messages) para dispositivo {device.id}")
+                        sent_any = True
+
+                    # Si llegamos aquí, romper el ciclo de reintentos
+                    break
+                except httpx.RequestError as e:
+                    logger.warning(f"Intento {attempt}/{max_retries} - error enviando a {monitor_url} para device {device.id}: {e}")
+                    if attempt < max_retries:
+                        await asyncio.sleep(retry_delay)
+                        retry_delay *= 2
+                    else:
+                        logger.error(f"Fallo al enviar logs a {monitor_url} para dispositivo {device.id} después de {max_retries} intentos")
+            # Pequeña pausa para evitar saturar el servicio al iterar dispositivos
+            await asyncio.sleep(0.5)
         return len(objects)
     except Exception as e:
         logger.error(f"Error al guardar logs para dispositivo {device.id}: {e}")
