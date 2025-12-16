@@ -91,33 +91,42 @@ async def recover_for_device(device, start_ts: Optional[int] = None, end_ts: Opt
         if monitor_url:
             # Convertir logs al formato esperado
             def convert_log_to_agilapps_format(log_dict):
-                """Convierte un objeto log a formato JSON esperado por AgilApps:
-                - `time` -> ISO string
-                - los numéricos se envían como números
-                - strings nulos -> ""
-                - numéricos nulos -> 0
+                """Convierte un objeto log a formato JSON respetando el tipo original:
+                - `time` -> ISO string (si viene como timestamp), o se deja si ya es string ISO
+                - si un campo viene como int/float se envía como número
+                - si viene como string se envía como string
+                - None se envía como null
                 """
                 converted = {}
                 for key, value in log_dict.items():
                     if key == 'time':
-                        try:
-                            dt = datetime.fromtimestamp(int(value), tz=timezone.utc)
-                            converted[key] = dt.isoformat()
-                        except Exception:
-                            try:
-                                converted[key] = str(value) if value else ""
-                            except Exception:
-                                converted[key] = ""
-                    else:
+                        # time: si viene como entero (timestamp), convertir a ISO UTC; si viene como string, conservarlo
                         if isinstance(value, (int, float)):
-                            converted[key] = value
-                        elif value is None:
-                            # Inferir si el campo debería ser numérico por su nombre
-                            if any(substr in key for substr in ("id", "value", "confidence", "card", "mask", "type", "component")):
-                                converted[key] = 0
+                            try:
+                                dt = datetime.fromtimestamp(int(value), tz=timezone.utc)
+                                converted[key] = dt.isoformat()
+                            except Exception:
+                                converted[key] = value
+                        elif isinstance(value, str):
+                            # si es un número en string, intentar parsearlo como timestamp
+                            v_strip = value.strip()
+                            if v_strip.isdigit():
+                                try:
+                                    dt = datetime.fromtimestamp(int(v_strip), tz=timezone.utc)
+                                    converted[key] = dt.isoformat()
+                                except Exception:
+                                    converted[key] = value
                             else:
-                                converted[key] = ""
+                                # presumimos que ya es un ISO string o similar; dejar tal cual
+                                converted[key] = value
                         else:
+                            converted[key] = value
+                    else:
+                        # Preservar el tipo original: int/float -> número, str -> string, None -> null
+                        if isinstance(value, (int, float, str)) or value is None:
+                            converted[key] = value
+                        else:
+                            # Para otros tipos (ej. bytes), convertir a string
                             converted[key] = str(value)
                 return converted
 
