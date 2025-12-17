@@ -4,7 +4,7 @@ import logging
 import os
 import httpx
 from dotenv import load_dotenv
-from api import get_device, login, load_objects, is_session_valid
+from api import get_device, login, logout, load_objects, is_session_valid
 from database import save_logs, init_db, save_sent_log, get_last_log_time
 from objects import AccessLog
 import time
@@ -51,7 +51,16 @@ async def fetch_initial_logs(device_id: int):
         last_time = get_last_log_time(device_id)
         # Cargar logs desde el último tiempo +1
         start_time = last_time + 1 if last_time else None
-        logs = await load_objects(device, "access_logs", start_time=start_time)
+        try:
+            logs = await load_objects(device, "access_logs", start_time=start_time)
+        except Exception as e:
+            if "Ya hay una sesión activa" in str(e):
+                logger.info(f"Sesión activa detectada para dispositivo {device_id}, cerrando y reabriendo...")
+                await logout(device)
+                await login(device)
+                logs = await load_objects(device, "access_logs", start_time=start_time)
+            else:
+                raise
         new_logs = logs  # Asumiendo que load_objects ya filtra por start_time
         if new_logs:
             save_logs(new_logs, device_id)
@@ -97,7 +106,16 @@ async def fetch_and_save_logs(device_id: int):
         last_time = get_last_log_time(device_id)
         # Cargar logs desde el último tiempo +1
         start_time = last_time + 1 if last_time else None
-        logs = await load_objects(device, "access_logs", start_time=start_time)
+        try:
+            logs = await load_objects(device, "access_logs", start_time=start_time)
+        except Exception as e:
+            if "Ya hay una sesión activa" in str(e):
+                logger.info(f"Sesión activa detectada para dispositivo {device_id}, cerrando y reabriendo...")
+                await logout(device)
+                await login(device)
+                logs = await load_objects(device, "access_logs", start_time=start_time)
+            else:
+                raise
         new_logs = logs  # Asumiendo que load_objects filtra por start_time
         if new_logs:
             save_logs(new_logs, device_id)
