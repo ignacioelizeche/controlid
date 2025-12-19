@@ -138,6 +138,17 @@ async def load_objects(device: Device, object_name: str, start_time: Optional[in
         objects = [cls(**item) for item in objects_data]
         logger.info(f"Cargados {len(objects)} objetos '{object_name}' desde {device.ip}")
         return objects
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 401:
+            # Intentar obtener mensaje del cuerpo
+            try:
+                error_data = e.response.json()
+                error_msg = error_data.get("message", str(e))
+            except:
+                error_msg = str(e)
+            raise ValueError(f"Sesión inválida: {error_msg}")
+        else:
+            raise ValueError(f"Error HTTP {e.response.status_code}: {e}")
     except httpx.RequestError as e:
         logger.error(f"Error al cargar objetos '{object_name}' desde {device.ip}: {e}")
         raise ValueError(f"Error al cargar objetos: {e}")

@@ -15,8 +15,13 @@ async def login(device: Device) -> None:
     """
     Inicia sesión en el dispositivo y guarda la sesión (async).
     """
+    # Si hay una sesión existente, intentar cerrarla primero
     if device.session_id is not None:
-        raise AuthError("Ya hay una sesión activa para este dispositivo.")
+        try:
+            await logout(device)
+        except AuthError:
+            # Ignorar errores de logout si la sesión ya es inválida
+            device.session_id = None
 
     url = f"http://{device.ip}/login.fcgi"
     payload = {
