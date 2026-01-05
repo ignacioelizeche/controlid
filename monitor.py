@@ -29,14 +29,11 @@ def convert_log_to_agilapps_format(log_dict):
             except Exception:
                 converted[key] = ""
         elif isinstance(value, int):
-            if value == 0:
-                converted[key] = "0.00000"
-            else:
-                converted[key] = str(value)
+            converted[key] = value
         elif isinstance(value, float):
-            converted[key] = f"{value:.5f}"
+            converted[key] = value
         elif value is None:
-            converted[key] = "0.00000"  # Para números None
+            converted[key] = None
         else:
             converted[key] = str(value) if value else ""  # Para strings, "" si vacío
     return converted
