@@ -69,6 +69,7 @@ async def fetch_initial_logs(device_id: int):
                         "objects": [convert_log_to_agilapps_format(log.__dict__) for log in new_logs]
                     }
                 }
+                logger.info(f"Device {device_id} - Enviando log: {data}")
                 try:
                     async with httpx.AsyncClient() as client:
                         response = await client.post(MONITOR_URL, json=data, timeout=10.0)
@@ -76,6 +77,7 @@ async def fetch_initial_logs(device_id: int):
                     logger.info(f"Enviados {len(new_logs)} logs iniciales a {MONITOR_URL}")
                     # Parsear la respuesta
                     resp_data = response.json()
+                    logger.info(f"Respuesta del servidor: {resp_data}")
                     if "Messages" in resp_data:
                         for i, msg in enumerate(resp_data["Messages"]):
                             if i < len(new_logs):
@@ -131,6 +133,7 @@ async def fetch_and_save_logs(device_id: int):
                     logger.info(f"Enviados {len(new_logs)} logs a {MONITOR_URL}")
                     # Parsear la respuesta y guardar el estado de envío
                     resp_data = response.json()
+                    logger.info(f"Respuesta del servidor para device {device_id}: {resp_data}")
                     if "Messages" in resp_data:
                         for i, msg in enumerate(resp_data["Messages"]):
                             if i < len(new_logs):
