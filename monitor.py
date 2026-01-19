@@ -51,8 +51,8 @@ async def fetch_initial_logs(device_id: int):
         try:
             logs = await load_objects(device, "access_logs", start_time=start_time)
         except Exception as e:
-            if "Ya hay una sesión activa" in str(e):
-                logger.info(f"Sesión activa detectada para dispositivo {device_id}, cerrando y reabriendo...")
+            if "Ya hay una sesión activa" in str(e) or "Sesión inválida" in str(e):
+                logger.info(f"Sesión inválida detectada para dispositivo {device_id}, cerrando y reabriendo...")
                 await logout(device)
                 await login(device)
                 logs = await load_objects(device, "access_logs", start_time=start_time)
@@ -108,8 +108,8 @@ async def fetch_and_save_logs(device_id: int):
         try:
             logs = await load_objects(device, "access_logs", start_time=start_time)
         except Exception as e:
-            if "Ya hay una sesión activa" in str(e):
-                logger.info(f"Sesión activa detectada para dispositivo {device_id}, cerrando y reabriendo...")
+            if "Ya hay una sesión activa" in str(e) or "Sesión inválida" in str(e):
+                logger.info(f"Sesión inválida detectada para dispositivo {device_id}, cerrando y reabriendo...")
                 await logout(device)
                 await login(device)
                 logs = await load_objects(device, "access_logs", start_time=start_time)
