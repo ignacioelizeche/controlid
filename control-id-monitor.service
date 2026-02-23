@@ -1,0 +1,20 @@
+[Unit]
+Description=Control ID Monitor Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=%i
+WorkingDirectory=/home/%i/Downloads/Temp/control ID/api
+ExecStart=/bin/bash /home/%i/Downloads/Temp/control ID/api/start_monitor.sh start
+ExecStop=/bin/bash /home/%i/Downloads/Temp/control ID/api/start_monitor.sh stop
+ExecReload=/bin/bash /home/%i/Downloads/Temp/control ID/api/start_monitor.sh restart
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Environment="PATH=/home/%i/Downloads/Temp/control ID/api/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
+
+[Install]
+WantedBy=multi-user.target
