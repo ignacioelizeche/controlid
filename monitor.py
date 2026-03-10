@@ -14,6 +14,7 @@ import traceback
 
 load_dotenv()  # Cargar variables de .env
 MONITOR_URL = os.getenv("MONITOR_URL")
+ERROR_WEBHOOK_URL = os.getenv("ERROR_WEBHOOK_URL")
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,27 @@ scheduler = AsyncIOScheduler()
 # Configuración de reintentos
 MAX_RETRIES = 3
 RETRY_DELAY = 5  # segundos
+
+async def send_error_webhook(error_type: str, device_id: int, error_message: str, context: str = ""):
+    """Envía una notificación de error a través de webhook si está configurado."""
+    if not ERROR_WEBHOOK_URL:
+        return
+
+    try:
+        error_data = {
+            "type": "error",
+            "error_type": error_type,
+            "device_id": device_id,
+            "message": error_message,
+            "context": context,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+        async with httpx.AsyncClient() as client:
+            await client.post(ERROR_WEBHOOK_URL, json=error_data, timeout=10.0)
+        logger.debug(f"Webhook de error enviado para device {device_id}")
+    except Exception as e:
+        logger.debug(f"Error al enviar webhook de error: {type(e).__name__}: {str(e)}")
 
 def convert_log_to_agilapps_format(log_dict):
     """Convierte el dict del log al formato esperado por AgilApps."""
@@ -83,7 +105,9 @@ async def fetch_initial_logs(device_id: int):
             if retry_count < MAX_RETRIES:
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                logger.error(f"Error crítico al obtener logs iniciales para dispositivo {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {e}\n{traceback.format_exc()}")
+                error_msg = f"Error crítico al obtener logs iniciales para dispositivo {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {e}"
+                logger.error(f"{error_msg}\n{traceback.format_exc()}")
+                await send_error_webhook("fetch_initial_logs_failed", device_id, str(e), f"{type(e).__name__}: {error_msg}")
 
 async def fetch_and_save_logs(device_id: int):
     """Función que se ejecuta cada minuto para obtener y guardar logs desde el último tiempo guardado."""
@@ -137,7 +161,9 @@ async def fetch_and_save_logs(device_id: int):
             if retry_count < MAX_RETRIES:
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                logger.error(f"Error crítico al obtener logs para dispositivo {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {e}\n{traceback.format_exc()}")
+                error_msg = f"Error crítico al obtener logs para dispositivo {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {e}"
+                logger.error(f"{error_msg}\n{traceback.format_exc()}")
+                await send_error_webhook("fetch_logs_failed", device_id, str(e), f"{type(e).__name__}: {error_msg}")
 
 async def send_logs_to_monitor(logs, device_id: int):
     """Envía logs a la URL del monitor con reintentos."""
@@ -182,20 +208,25 @@ async def send_logs_to_monitor(logs, device_id: int):
                 await asyncio.sleep(RETRY_DELAY)
             else:
                 logger.error(f"Error crítico al enviar logs para device {device_id} después de {MAX_RETRIES} intentos: {error_details}\n{traceback.format_exc()}")
+                await send_error_webhook("send_logs_http_error", device_id, error_details, f"HTTP {e.response.status_code}")
         except httpx.RequestError as e:
             retry_count += 1
             logger.warning(f"Intento de envío {retry_count}/{MAX_RETRIES} falló para device {device_id}: {type(e).__name__}: {str(e)}")
             if retry_count < MAX_RETRIES:
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                logger.error(f"Error crítico al enviar logs para device {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {str(e)}\n{traceback.format_exc()}")
+                error_msg = f"Error crítico al enviar logs para device {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {str(e)}"
+                logger.error(f"{error_msg}\n{traceback.format_exc()}")
+                await send_error_webhook("send_logs_request_error", device_id, str(e), f"{type(e).__name__}: {error_msg}")
         except Exception as e:
             retry_count += 1
             logger.warning(f"Intento de envío {retry_count}/{MAX_RETRIES} falló para device {device_id}: {type(e).__name__}: {str(e)}")
             if retry_count < MAX_RETRIES:
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                logger.error(f"Error crítico al enviar logs para device {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {str(e)}\n{traceback.format_exc()}")
+                error_msg = f"Error crítico al enviar logs para device {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {str(e)}"
+                logger.error(f"{error_msg}\n{traceback.format_exc()}")
+                await send_error_webhook("send_logs_general_error", device_id, str(e), f"{type(e).__name__}: {error_msg}")
 
 def start_monitoring(device_id: int):
     """Inicia el monitoreo para un dispositivo."""
