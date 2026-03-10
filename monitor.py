@@ -10,6 +10,7 @@ from objects import AccessLog
 import time
 from datetime import datetime, timezone
 import asyncio
+import traceback
 
 load_dotenv()  # Cargar variables de .env
 MONITOR_URL = os.getenv("MONITOR_URL")
@@ -78,11 +79,11 @@ async def fetch_initial_logs(device_id: int):
 
         except Exception as e:
             retry_count += 1
-            logger.warning(f"Intento {retry_count}/{MAX_RETRIES} falló para logs iniciales del dispositivo {device_id}: {e}")
+            logger.warning(f"Intento {retry_count}/{MAX_RETRIES} falló para logs iniciales del dispositivo {device_id}: {type(e).__name__}: {e}")
             if retry_count < MAX_RETRIES:
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                logger.error(f"Error crítico al obtener logs iniciales para dispositivo {device_id} después de {MAX_RETRIES} intentos: {e}")
+                logger.error(f"Error crítico al obtener logs iniciales para dispositivo {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {e}\n{traceback.format_exc()}")
 
 async def fetch_and_save_logs(device_id: int):
     """Función que se ejecuta cada minuto para obtener y guardar logs desde el último tiempo guardado."""
@@ -132,11 +133,11 @@ async def fetch_and_save_logs(device_id: int):
 
         except Exception as e:
             retry_count += 1
-            logger.warning(f"Intento {retry_count}/{MAX_RETRIES} falló para dispositivo {device_id}: {e}")
+            logger.warning(f"Intento {retry_count}/{MAX_RETRIES} falló para dispositivo {device_id}: {type(e).__name__}: {e}")
             if retry_count < MAX_RETRIES:
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                logger.error(f"Error crítico al obtener logs para dispositivo {device_id} después de {MAX_RETRIES} intentos: {e}")
+                logger.error(f"Error crítico al obtener logs para dispositivo {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {e}\n{traceback.format_exc()}")
 
 async def send_logs_to_monitor(logs, device_id: int):
     """Envía logs a la URL del monitor con reintentos."""
@@ -171,11 +172,11 @@ async def send_logs_to_monitor(logs, device_id: int):
 
         except httpx.RequestError as e:
             retry_count += 1
-            logger.warning(f"Intento de envío {retry_count}/{MAX_RETRIES} falló para device {device_id}: {e}")
+            logger.warning(f"Intento de envío {retry_count}/{MAX_RETRIES} falló para device {device_id}: {type(e).__name__}: {e}")
             if retry_count < MAX_RETRIES:
                 await asyncio.sleep(RETRY_DELAY)
             else:
-                logger.error(f"Error crítico al enviar logs para device {device_id} después de {MAX_RETRIES} intentos: {e}")
+                logger.error(f"Error crítico al enviar logs para device {device_id} después de {MAX_RETRIES} intentos: {type(e).__name__}: {e}\n{traceback.format_exc()}")
 
 def start_monitoring(device_id: int):
     """Inicia el monitoreo para un dispositivo."""
